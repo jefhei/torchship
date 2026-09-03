@@ -1,0 +1,40 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid #23272e;
+  background: #14161a;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: #e8eaed;
+}
+
+.app-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: #8b93a1;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.scaffold-note {
+  color: #6c7480;
+  font-size: 14px;
+}

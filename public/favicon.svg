@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- stylized torch-ship: engine flame below, hull above -->
+  <rect width="32" height="32" rx="6" fill="#14161a" />
+  <path d="M16 3 L24 12 L20 12 L20 16 L12 16 L12 12 L8 12 Z" fill="#9aa3ad" />
+  <path d="M16 20 C18 23 18 25 16 29 C14 25 14 23 16 20 Z" fill="#ffb454" />
+  <rect x="9" y="4" width="2" height="7" rx="1" fill="#ffb454" opacity="0.35" />
+  <rect x="21" y="4" width="2" height="7" rx="1" fill="#ffb454" opacity="0.35" />
+</svg>

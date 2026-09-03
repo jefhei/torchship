@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "project": "torchship",
+  "current_milestone": "M0 \u2014 Spike & Fixtures",
+  "current_task": "M0-T1",
+  "completed_tasks": [],
+  "milestones": [
+    {
+      "id": "M0",
+      "name": "Spike & Fixtures",
+      "status": "in_progress",
+      "days": "1-2"
+    },
+    {
+      "id": "M1",
+      "name": "Foundation & Data Contracts",
+      "status": "pending",
+      "days": "1-3"
+    },
+    {
+      "id": "M2",
+      "name": "Module Kit Authoring",
+      "status": "pending",
+      "days": "3-7"
+    },
+    {
+      "id": "M3",
+      "name": "Assembler & Vertical Navigation",
+      "status": "pending",
+      "days": "7-10"
+    },
+    {
+      "id": "M4",
+      "name": "Materials, Lighting & Atmosphere",
+      "status": "pending",
+      "days": "10-12"
+    },
+    {
+      "id": "M5",
+      "name": "Walkthrough Polish & Review Loops",
+      "status": "pending",
+      "days": "12-13"
+    },
+    {
+      "id": "M6",
+      "name": "Export, QA & Launch",
+      "status": "pending",
+      "days": "13-14"
+    }
+  ],
+  "notes": "Repo scaffolded 2026-09-03 (initial commit): Vite + TS + React 19 + R3F skeleton, configs, trackers, PRD.md + BUILD_PLAN.md checked in. NEXT: M0-T1 (Spike 1 \u2014 wayfinding: assemble 3 rough white-box decks, walk them, record whether a player can find the bridge; verdict to docs/spikes.md). NOTE for build agents: M0 spikes are visual/judgment experiments \u2014 they need a human in the loop (browser walk), not just CI; run them interactively or document clearly what was verified headlessly."
+}
