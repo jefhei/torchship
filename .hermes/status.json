@@ -2,7 +2,7 @@
   "version": 1,
   "project": "torchship",
   "current_milestone": "M0 \u2014 Spike & Fixtures",
-  "current_task": "M0-T1",
+  "current_task": "M1-T1",
   "completed_tasks": [],
   "milestones": [
     {
@@ -48,5 +48,5 @@
       "days": "13-14"
     }
   ],
-  "notes": "Repo scaffolded 2026-09-03 (initial commit): Vite + TS + React 19 + R3F skeleton, configs, trackers, PRD.md + BUILD_PLAN.md checked in. NEXT: M0-T1 (Spike 1 \u2014 wayfinding: assemble 3 rough white-box decks, walk them, record whether a player can find the bridge; verdict to docs/spikes.md). NOTE for build agents: M0 spikes are visual/judgment experiments \u2014 they need a human in the loop (browser walk), not just CI; run them interactively or document clearly what was verified headlessly."
+  "notes": "Dependency order fixed 2026-09-03 for cron execution: M1-T1 (scaffold) has no deps and runs FIRST; M0 spikes/fixtures depend on M1-T1/M1-T2. Human-held visual spikes M0-T1 (wayfinding), M0-T3 (galley lighting), M0-T4 (ladder feel) are SKIPPED by the build cron until an interactive session runs them \u2014 they block nothing. Headless M0 work (T2 seam measurements, T5 fixtures, T6 invariant stubs) is cron-completable. Build cron: torchship-build daily 11:00 (repurposed endpointguard slot, job 34ecea7a58a8). NEXT: M1-T1 (R3F app shell with empty viewport)."
 }

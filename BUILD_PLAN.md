@@ -24,16 +24,18 @@ A first-person walkthrough of a cramped, lived-in, Roci-inspired corvette interi
 
 | Task | Description | Depends On | Est. |
 |------|-------------|------------|------|
-| [ ] M0-T1 | Spike 1 (wayfinding): assemble 3 rough white-box decks, walk them, record whether a player can find the bridge | — | `0.5d` |
-| [ ] M0-T2 | Spike 2 (seams): join all 6 module types in a stress spec with offsets; measure seam gaps + socket misalignment; fix [auto] tolerances from real numbers | — | `0.5d` |
-| [ ] M0-T3 | Spike 3 (lighting): light one fully-kitted module (galley) to the §4 mood as the lighting reference for all modules | — | `0.5d` |
-| [ ] M0-T4 | Spike 4 (ladder climb): prototype ladder/hatch state machine on a 2-deck whitebox; tune speed/step/hatch transitions | — | `0.5d` |
-| [ ] M0-T5 | Define canonical test ships & check them in: (a) Patrol 5-deck, (b) Long-Haul stretch, (c) Science retrofit, (d) pathological offset-hatch stress spec | M0-T2 | `0.5d` |
+| [ ] M0-T1 | Spike 1 (wayfinding): assemble 3 rough white-box decks, walk them, record whether a player can find the bridge — **human-held (visual)** | M1-T1 | `0.5d` |
+| [ ] M0-T2 | Spike 2 (seams): join all 6 module types in a stress spec with offsets; measure seam gaps + socket misalignment; fix [auto] tolerances from real numbers | M1-T1 | `0.5d` |
+| [ ] M0-T3 | Spike 3 (lighting): light one fully-kitted module (galley) to the §4 mood as the lighting reference for all modules — **human-held (visual)** | M1-T1 | `0.5d` |
+| [ ] M0-T4 | Spike 4 (ladder climb): prototype ladder/hatch state machine on a 2-deck whitebox; tune speed/step/hatch transitions — **human-held (feel)** | M1-T1 | `0.5d` |
+| [ ] M0-T5 | Define canonical test ships & check them in: (a) Patrol 5-deck, (b) Long-Haul stretch, (c) Science retrofit, (d) pathological offset-hatch stress spec | M1-T2 | `0.5d` |
 | [ ] M0-T6 | Stub `[auto]` invariant checks (PRD §8) as runnable tests against the fixtures | M0-T5 | `0.5d` |
 
-**Machine gate:** spike verdicts recorded in `docs/spikes.md`; four ships load; invariant test harness runs (may fail — that's fine, they're targets).
-**Human review:** n/a.
-**Exit:** all four bets proven or the plan pivoted around them; four test ships exist in the repo.
+> **Execution note:** M1-T1 (scaffold) has NO dependency — it runs first so spikes and fixtures have an app to live in. Spikes M0-T1 / M0-T3 / M0-T4 are **human-held**: they need visual/feel judgment (a browser walkthrough), so the daily build cron SKIPS them — leaves them unchecked, records no verdict — until an interactive session runs them. They do NOT block M1+ (nothing depends on them). M0-T2 (seam measurements), M0-T5 (fixtures) and M0-T6 (invariant stubs) are headless-completable by the cron.
+
+**Machine gate:** spike verdicts recorded; fixtures load; invariant test harness runs (may fail — that's fine, they're targets).
+**Human review:** n/a (human-held spikes T1/T3/T4 are run interactively and their verdicts recorded in `docs/spikes.md`).
+**Exit:** riskiest bet is proven or the plan is pivoted around it; three test worlds exist in the repo.
 
 ## M1 — Foundation & Data Contracts (days 1–3)
 
@@ -41,7 +43,7 @@ A first-person walkthrough of a cramped, lived-in, Roci-inspired corvette interi
 
 | Task | Description | Depends On | Est. |
 |------|-------------|------------|------|
-| [ ] M1-T1 | Scaffold app (Vite + TS + R3F); app boots with an empty viewport | M0 | `0.5d` |
+| [ ] M1-T1 | Scaffold app (Vite + TS + R3F); app boots with an empty viewport | — | `0.5d` |
 | [ ] M1-T2 | Define data-contract types in `src/types/`: `ShipSpec`, `ModuleRef`, `DoorSocket`, module-kit manifest, scene graph, material slots | M1-T1 | `1d` |
 | [ ] M1-T3 | Ship Spec validator (schema check, socket alignment, spine connectivity graph) + preset JSON for the four fixtures | M1-T2 | `1d` |
 | [ ] M1-T4 | Lint/format/build CI + vitest runner; material-slot completeness check (unassigned slot = failed build) | M1-T1 | `0.5d` |
