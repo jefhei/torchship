@@ -19,4 +19,5 @@ npm run verify   # lint + typecheck + test + build (the machine gate)
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every
-BUILD_PLAN task. Ship name: TBD by the crew (M6 — every Rocinante needs its name).
+BUILD_PLAN task. Ship name locked at build start (rule 9): **Hound-class light corvette *Firebrand*** —
+goes into the Ship Spec `name` field (M1-T2) and the share URL (M6).

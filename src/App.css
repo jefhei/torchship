@@ -5,8 +5,9 @@
 }
 
 .app-header {
+  flex: none;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   padding: 10px 16px;
   border-bottom: 1px solid #23272e;
@@ -26,15 +27,46 @@
   color: #8b93a1;
 }
 
+.ship-name {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #d3a860;
+  border: 1px solid #3a3120;
+  border-radius: 3px;
+  padding: 2px 8px;
+  background: #1b1711;
+  user-select: none;
+}
+
 .app-main {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 0;
 }
 
-.scaffold-note {
-  color: #6c7480;
-  font-size: 14px;
+.viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+/* R3F <Canvas> sizes itself to its parent; the parent is the flexed div above. */
+
+.viewport-ready {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #5f6b58;
+  background: rgba(10, 12, 9, 0.55);
+  border: 1px solid #232b20;
+  border-radius: 3px;
+  padding: 2px 8px;
+  pointer-events: none;
+  user-select: none;
 }
