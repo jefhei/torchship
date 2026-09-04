@@ -1,4 +1,22 @@
 {
   "project": "torchship",
-  "tasks": {}
+  "tasks": {
+    "M1-T1": {
+      "status": "complete",
+      "date": "2026-09-04",
+      "title": "Scaffold app (Vite + TS + R3F); app boots with an empty viewport",
+      "files_modified": [
+        "src/App.tsx",
+        "src/App.css",
+        "src/Viewport.tsx",
+        "src/App.test.tsx",
+        "README.md"
+      ],
+      "tests_added": [
+        "src/App.test.tsx — 4 tests: header renders title+class line; vessel name chip (Firebrand); viewport + R3F canvas mounted in <main>; ready chip appears when Canvas onCreated fires (boot path)"
+      ],
+      "verification": "lint 0w/0e; typecheck clean; test 5/5 passed (2 files); build green; prettier clean on touched files",
+      "notes": "R3F <Canvas> viewport wired into the shell with an EMPTY scene (clear color only) — kit/assembler content lands in M2/M3. onCreated flips a 'viewport ready' chip so boot-vs-blank is distinguishable headlessly. Ship name locked per BUILD_PLAN rule 9: Hound-class light corvette 'Firebrand' (header chip + README; goes into ShipSpec name field at M1-T2, share URL at M6). Tests mock @react-three/fiber Canvas (jsdom has no WebGL)."
+    }
+  }
 }
