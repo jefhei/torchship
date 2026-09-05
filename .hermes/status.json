@@ -1,9 +1,9 @@
 {
   "version": 1,
   "project": "torchship",
-  "current_milestone": "M0 \u2014 Spike & Fixtures",
-  "current_task": "M0-T2",
-  "completed_tasks": ["M1-T1"],
+  "current_milestone": "M1 \u2014 Foundation & Data Contracts",
+  "current_task": "M1-T2",
+  "completed_tasks": ["M1-T1", "M0-T2"],
   "milestones": [
     {
       "id": "M0",
@@ -14,7 +14,7 @@
     {
       "id": "M1",
       "name": "Foundation & Data Contracts",
-      "status": "pending",
+      "status": "in_progress",
       "days": "1-3"
     },
     {
@@ -48,5 +48,5 @@
       "days": "13-14"
     }
   ],
-  "notes": "Dependency order fixed 2026-09-03 for cron execution: M1-T1 (scaffold) has no deps and runs FIRST; M0 spikes/fixtures depend on M1-T1/M1-T2. Human-held visual spikes M0-T1 (wayfinding), M0-T3 (galley lighting), M0-T4 (ladder feel) are SKIPPED by the build cron until an interactive session runs them \u2014 they block nothing. Headless M0 work (T2 seam measurements, T5 fixtures, T6 invariant stubs) is cron-completable. Build cron: torchship-build daily 11:00 (repurposed endpointguard slot, job 34ecea7a58a8). DONE 2026-09-04: M1-T1 \u2014 R3F app shell with empty viewport (src/Viewport.tsx + shell tests). NEXT: M0-T2 (seam measurements spike \u2014 join all 6 module types in a stress spec, measure gaps, record verdict in docs/spikes.md). Ship name locked: Hound-class light corvette 'Firebrand'."
+  "notes": "Dependency order fixed 2026-09-03 for cron execution: M1-T1 (scaffold) has no deps and runs FIRST; M0 spikes/fixtures depend on M1-T1/M1-T2. Human-held visual spikes M0-T1 (wayfinding), M0-T3 (galley lighting), M0-T4 (ladder feel) are SKIPPED by the build cron until an interactive session runs them \u2014 they block nothing. Headless M0 work (T2 seam measurements, T5 fixtures, T6 invariant stubs) is cron-completable. Build cron: torchship-build daily 11:00 (repurposed endpointguard slot, job 34ecea7a58a8). DONE 2026-09-04: M1-T1 \u2014 R3F app shell with empty viewport (src/Viewport.tsx + shell tests). DONE 2026-09-05: M0-T2 \u2014 seam spike PROVEN (docs/spikes.md + src/spikes/seams/): socket-solved joins of all 6 white-box module types measure 0.000000 mm across 78 zero-offset joins; offsets respond 1:1 axis-separated; noise budget fixed at \u00b10.5 mm/socket (2\u00d7 margin vs 2 mm watertight cap, 5\u00d7 vs 5 mm hatch cap); pathological joins \u226510 mm are the validator reject set. [auto] tolerance constants live in src/spikes/seams/tolerances.ts (watertightGapMm 2, hatchAlignMm 5, maxSocketAuthoringErrorMm 0.5, standardDoorCenterM 1.0) \u2014 M0-T6/M1-T3 import them. NEXT: M1-T2 (define data-contract types in src/types/: ShipSpec, ModuleRef, DoorSocket, module-kit manifest, scene graph, material slots); M0-T5 (fixtures) unlocks once M1-T2 lands."
 }

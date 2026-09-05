@@ -17,6 +17,25 @@
       ],
       "verification": "lint 0w/0e; typecheck clean; test 5/5 passed (2 files); build green; prettier clean on touched files",
       "notes": "R3F <Canvas> viewport wired into the shell with an EMPTY scene (clear color only) — kit/assembler content lands in M2/M3. onCreated flips a 'viewport ready' chip so boot-vs-blank is distinguishable headlessly. Ship name locked per BUILD_PLAN rule 9: Hound-class light corvette 'Firebrand' (header chip + README; goes into ShipSpec name field at M1-T2, share URL at M6). Tests mock @react-three/fiber Canvas (jsdom has no WebGL)."
+    },
+    "M0-T2": {
+      "status": "complete",
+      "date": "2026-09-05",
+      "title": "Spike 2 (seams): join all 6 module types in a stress spec with offsets; measure seam gaps + socket misalignment; fix [auto] tolerances from real numbers",
+      "files_modified": [
+        "src/spikes/seams/vec.ts",
+        "src/spikes/seams/kit.ts",
+        "src/spikes/seams/measure.ts",
+        "src/spikes/seams/stress.ts",
+        "src/spikes/seams/tolerances.ts",
+        "src/spikes/seams/seamStress.test.ts",
+        "docs/spikes.md"
+      ],
+      "tests_added": [
+        "src/spikes/seams/seamStress.test.ts — 13 tests: exactness (78 socket-solved joins @ zero offset all ≤ float eps); kit scanner flags engineering.high-hatch@1.2m; spine-face flush mating per room type; normal/lateral/vertical offset response slope 1.000 under both policies; noise ≤ 2ε bounds (door vertical + far-face shift); ±0.5 mm margin claims (≥2× watertight, ≥5× hatch); ±1.0 mm = zero-headroom ceiling; pathological reject set (10/25 mm offsets + 200 mm authored high-hatch step); tolerance constants exported"
+      ],
+      "verification": "lint 0w/0e (14 files); typecheck clean; test 18/18 passed (3 files); build green; prettier clean on new files",
+      "notes": "VERDICT: proven. White-box stand-ins for all 6 module types joined socket-to-socket: 78 joins @ zero offset → max seam gap/lateral/vertical/floorStep = 0.000000 mm (join math is never the error source). Offset response linear & axis-separated (normal δ → open seam δ; lateral δ → misalign δ; vertical δ swallowed by floor pin / becomes door-miss+floor-step under door solve). Authoring noise ±0.5 mm → ≤1.0 mm bounds (2× margin vs 2 mm watertight cap, 5× vs 5 mm hatch cap; ±1.0 mm = zero headroom → 0.5 mm is the authoring ceiling). Pathological joins (≥10 mm offsets; engineering 1.2 m high-hatch vs standard 1.0 m door → 200 mm step) exceed both caps → validator reject set. Decision: sockets are the ONLY join interface (M3-T2 'never freehand' now measured, not asserted); floor-pinned assembly (walkable deck plates) with XZ from sockets; tolerances fixed in src/spikes/seams/tolerances.ts (imported by M0-T6/M1-T3): watertightGapMm 2, hatchAlignMm 5, maxSocketAuthoringErrorMm 0.5, standardDoorCenterM 1.0. Full verdict + measured report card in docs/spikes.md."
     }
   }
 }
