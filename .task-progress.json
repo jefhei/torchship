@@ -1,64 +1,84 @@
 {
-  "project": "torchship",
-  "tasks": {
-    "M1-T1": {
-      "status": "complete",
-      "date": "2026-09-04",
-      "title": "Scaffold app (Vite + TS + R3F); app boots with an empty viewport",
-      "files_modified": [
-        "src/App.tsx",
-        "src/App.css",
-        "src/Viewport.tsx",
-        "src/App.test.tsx",
-        "README.md"
-      ],
-      "tests_added": [
-        "src/App.test.tsx — 4 tests: header renders title+class line; vessel name chip (Firebrand); viewport + R3F canvas mounted in <main>; ready chip appears when Canvas onCreated fires (boot path)"
-      ],
-      "verification": "lint 0w/0e; typecheck clean; test 5/5 passed (2 files); build green; prettier clean on touched files",
-      "notes": "R3F <Canvas> viewport wired into the shell with an EMPTY scene (clear color only) — kit/assembler content lands in M2/M3. onCreated flips a 'viewport ready' chip so boot-vs-blank is distinguishable headlessly. Ship name locked per BUILD_PLAN rule 9: Hound-class light corvette 'Firebrand' (header chip + README; goes into ShipSpec name field at M1-T2, share URL at M6). Tests mock @react-three/fiber Canvas (jsdom has no WebGL)."
-    },
-    "M0-T2": {
-      "status": "complete",
-      "date": "2026-09-05",
-      "title": "Spike 2 (seams): join all 6 module types in a stress spec with offsets; measure seam gaps + socket misalignment; fix [auto] tolerances from real numbers",
-      "files_modified": [
-        "src/spikes/seams/vec.ts",
-        "src/spikes/seams/kit.ts",
-        "src/spikes/seams/measure.ts",
-        "src/spikes/seams/stress.ts",
-        "src/spikes/seams/tolerances.ts",
-        "src/spikes/seams/seamStress.test.ts",
-        "docs/spikes.md"
-      ],
-      "tests_added": [
-        "src/spikes/seams/seamStress.test.ts — 13 tests: exactness (78 socket-solved joins @ zero offset all ≤ float eps); kit scanner flags engineering.high-hatch@1.2m; spine-face flush mating per room type; normal/lateral/vertical offset response slope 1.000 under both policies; noise ≤ 2ε bounds (door vertical + far-face shift); ±0.5 mm margin claims (≥2× watertight, ≥5× hatch); ±1.0 mm = zero-headroom ceiling; pathological reject set (10/25 mm offsets + 200 mm authored high-hatch step); tolerance constants exported"
-      ],
-      "verification": "lint 0w/0e (14 files); typecheck clean; test 18/18 passed (3 files); build green; prettier clean on new files",
-      "notes": "VERDICT: proven. White-box stand-ins for all 6 module types joined socket-to-socket: 78 joins @ zero offset → max seam gap/lateral/vertical/floorStep = 0.000000 mm (join math is never the error source). Offset response linear & axis-separated (normal δ → open seam δ; lateral δ → misalign δ; vertical δ swallowed by floor pin / becomes door-miss+floor-step under door solve). Authoring noise ±0.5 mm → ≤1.0 mm bounds (2× margin vs 2 mm watertight cap, 5× vs 5 mm hatch cap; ±1.0 mm = zero headroom → 0.5 mm is the authoring ceiling). Pathological joins (≥10 mm offsets; engineering 1.2 m high-hatch vs standard 1.0 m door → 200 mm step) exceed both caps → validator reject set. Decision: sockets are the ONLY join interface (M3-T2 'never freehand' now measured, not asserted); floor-pinned assembly (walkable deck plates) with XZ from sockets; tolerances fixed in src/spikes/seams/tolerances.ts (imported by M0-T6/M1-T3): watertightGapMm 2, hatchAlignMm 5, maxSocketAuthoringErrorMm 0.5, standardDoorCenterM 1.0. Full verdict + measured report card in docs/spikes.md."
-    },
-    "M1-T2": {
-      "status": "complete",
-      "date": "2026-09-06",
-      "title": "Define data-contract types in src/types/: ShipSpec, ModuleRef, DoorSocket, module-kit manifest, scene graph, material slots",
-      "files_modified": [
-        "src/types/geometry.ts",
-        "src/types/units.ts",
-        "src/types/ship.ts",
-        "src/types/kit.ts",
-        "src/types/scene.ts",
-        "src/types/materials.ts",
-        "src/types/index.ts"
-      ],
-      "tests_added": [
-        "src/types/geometry.test.ts — 4 tests: FACING_VEC four facings/unit; rotY axis quarter-turns exact; yaw leaves Y untouched + XZ length preserved; quarter-turn composition (2×=half, 4×=identity)",
-        "src/types/units.test.ts — 3 tests: MM + deck clear/pitch conventions; standard door sits bottom edge on floor (1.0 − 2.0/2 = 0); deck floors descend by pitch, monotone",
-        "src/types/kit.test.ts — 13 tests: deck-offset helper (standard 0, engineering high-hatch +0.2, −0.2); door-size default vs explicit; isStandardDoorCenter; getKitModule find/throw; manifest integrity: intact manifest passes, dup module ids, dup door/light/equipment ids, non-positive dims, socket off-face > ±0.5 mm (and inside-budget ok), door overhanging face, door not fitting floor-to-ceiling, light/equipment outside box, assert throws listing problems",
-        "src/types/materials.test.ts — 6 tests: vocabulary = 9 PRD §7 slots unique; MaterialSlots<T> complete-only (compile-time @ts-expect-error on omission); assert passes 9-slot theme; throws listing every unassigned slot; throws on present-but-undefined; ignores unknown extra keys",
-        "src/types/barrel.test.ts — 2 tests: barrel re-exports runtime helpers (MM, rotY, MATERIAL_SLOTS, getKitModule) and type surface (ShipSpec/ModuleRef/MaterialSlot compile from '../types')"
-      ],
-      "verification": "lint 0w/0e (26 files); typecheck clean; test 46/46 passed (8 files, +28 new); build green; prettier clean on new files only",
-      "notes": "All PRD §7 contracts typed and checked in under src/types/ (barrel at src/types/index.ts): geometry primitives (Vec3/Rotation/Facing + FACING_VEC/rotY, Y-thrust conventions from the proven M0-T2 vec), units (MM, deck 3.0 clear/3.2 pitch, standard door 0.9×2.0 @ 1.0 m center, deckFloorYFor), ShipSpec/DeckSpec/ModuleRef (decks ordered nose→aft, yPosition explicit, ref offset.y reserved 0 = floor-pinned), kit manifest (KitModule: dimensions/doorSockets/lightSockets/equipmentSlots/collisionHint + DoorSocket position/facing/deck-offset; doorCenterDeckOffsetM is the contract's deck offset; authoring frame: floor y=0, XZ footprint centered), scene graph (DeckNode: merged geometry groups by material slot, instance batches, named interactive transforms, per-deck collision hull), material slots (9-name vocabulary + MaterialSlots<T> mapped type where omission = compile error + runtime assertMaterialSlotsComplete for JSON themes — M1-T4 CI hook and M2-T7 harness build on it). Kit-manifest integrity checker (kitManifestProblems/assertKitManifestIntegrity) validates authoring frame incl. socket flush within the M0-T2 measured ±0.5 mm budget (imports SEAM_TOLERANCES — no re-derivation). 28 new tests pin every helper. No three.js in the contracts (manifest-level; renderer attaches buffers by id at M3). NEXT: M0-T5 (canonical fixtures — Patrol/Long-Haul/Science + pathological stress spec), which unlocks M0-T6 + M1-T3."
-    }
+ "project": "torchship",
+ "tasks": {
+  "M1-T1": {
+   "status": "complete",
+   "date": "2026-09-04",
+   "title": "Scaffold app (Vite + TS + R3F); app boots with an empty viewport",
+   "files_modified": [
+    "src/App.tsx",
+    "src/App.css",
+    "src/Viewport.tsx",
+    "src/App.test.tsx",
+    "README.md"
+   ],
+   "tests_added": [
+    "src/App.test.tsx \u2014 4 tests: header renders title+class line; vessel name chip (Firebrand); viewport + R3F canvas mounted in <main>; ready chip appears when Canvas onCreated fires (boot path)"
+   ],
+   "verification": "lint 0w/0e; typecheck clean; test 5/5 passed (2 files); build green; prettier clean on touched files",
+   "notes": "R3F <Canvas> viewport wired into the shell with an EMPTY scene (clear color only) \u2014 kit/assembler content lands in M2/M3. onCreated flips a 'viewport ready' chip so boot-vs-blank is distinguishable headlessly. Ship name locked per BUILD_PLAN rule 9: Hound-class light corvette 'Firebrand' (header chip + README; goes into ShipSpec name field at M1-T2, share URL at M6). Tests mock @react-three/fiber Canvas (jsdom has no WebGL)."
+  },
+  "M0-T2": {
+   "status": "complete",
+   "date": "2026-09-05",
+   "title": "Spike 2 (seams): join all 6 module types in a stress spec with offsets; measure seam gaps + socket misalignment; fix [auto] tolerances from real numbers",
+   "files_modified": [
+    "src/spikes/seams/vec.ts",
+    "src/spikes/seams/kit.ts",
+    "src/spikes/seams/measure.ts",
+    "src/spikes/seams/stress.ts",
+    "src/spikes/seams/tolerances.ts",
+    "src/spikes/seams/seamStress.test.ts",
+    "docs/spikes.md"
+   ],
+   "tests_added": [
+    "src/spikes/seams/seamStress.test.ts \u2014 13 tests: exactness (78 socket-solved joins @ zero offset all \u2264 float eps); kit scanner flags engineering.high-hatch@1.2m; spine-face flush mating per room type; normal/lateral/vertical offset response slope 1.000 under both policies; noise \u2264 2\u03b5 bounds (door vertical + far-face shift); \u00b10.5 mm margin claims (\u22652\u00d7 watertight, \u22655\u00d7 hatch); \u00b11.0 mm = zero-headroom ceiling; pathological reject set (10/25 mm offsets + 200 mm authored high-hatch step); tolerance constants exported"
+   ],
+   "verification": "lint 0w/0e (14 files); typecheck clean; test 18/18 passed (3 files); build green; prettier clean on new files",
+   "notes": "VERDICT: proven. White-box stand-ins for all 6 module types joined socket-to-socket: 78 joins @ zero offset \u2192 max seam gap/lateral/vertical/floorStep = 0.000000 mm (join math is never the error source). Offset response linear & axis-separated (normal \u03b4 \u2192 open seam \u03b4; lateral \u03b4 \u2192 misalign \u03b4; vertical \u03b4 swallowed by floor pin / becomes door-miss+floor-step under door solve). Authoring noise \u00b10.5 mm \u2192 \u22641.0 mm bounds (2\u00d7 margin vs 2 mm watertight cap, 5\u00d7 vs 5 mm hatch cap; \u00b11.0 mm = zero headroom \u2192 0.5 mm is the authoring ceiling). Pathological joins (\u226510 mm offsets; engineering 1.2 m high-hatch vs standard 1.0 m door \u2192 200 mm step) exceed both caps \u2192 validator reject set. Decision: sockets are the ONLY join interface (M3-T2 'never freehand' now measured, not asserted); floor-pinned assembly (walkable deck plates) with XZ from sockets; tolerances fixed in src/spikes/seams/tolerances.ts (imported by M0-T6/M1-T3): watertightGapMm 2, hatchAlignMm 5, maxSocketAuthoringErrorMm 0.5, standardDoorCenterM 1.0. Full verdict + measured report card in docs/spikes.md."
+  },
+  "M1-T2": {
+   "status": "complete",
+   "date": "2026-09-06",
+   "title": "Define data-contract types in src/types/: ShipSpec, ModuleRef, DoorSocket, module-kit manifest, scene graph, material slots",
+   "files_modified": [
+    "src/types/geometry.ts",
+    "src/types/units.ts",
+    "src/types/ship.ts",
+    "src/types/kit.ts",
+    "src/types/scene.ts",
+    "src/types/materials.ts",
+    "src/types/index.ts"
+   ],
+   "tests_added": [
+    "src/types/geometry.test.ts \u2014 4 tests: FACING_VEC four facings/unit; rotY axis quarter-turns exact; yaw leaves Y untouched + XZ length preserved; quarter-turn composition (2\u00d7=half, 4\u00d7=identity)",
+    "src/types/units.test.ts \u2014 3 tests: MM + deck clear/pitch conventions; standard door sits bottom edge on floor (1.0 \u2212 2.0/2 = 0); deck floors descend by pitch, monotone",
+    "src/types/kit.test.ts \u2014 13 tests: deck-offset helper (standard 0, engineering high-hatch +0.2, \u22120.2); door-size default vs explicit; isStandardDoorCenter; getKitModule find/throw; manifest integrity: intact manifest passes, dup module ids, dup door/light/equipment ids, non-positive dims, socket off-face > \u00b10.5 mm (and inside-budget ok), door overhanging face, door not fitting floor-to-ceiling, light/equipment outside box, assert throws listing problems",
+    "src/types/materials.test.ts \u2014 6 tests: vocabulary = 9 PRD \u00a77 slots unique; MaterialSlots<T> complete-only (compile-time @ts-expect-error on omission); assert passes 9-slot theme; throws listing every unassigned slot; throws on present-but-undefined; ignores unknown extra keys",
+    "src/types/barrel.test.ts \u2014 2 tests: barrel re-exports runtime helpers (MM, rotY, MATERIAL_SLOTS, getKitModule) and type surface (ShipSpec/ModuleRef/MaterialSlot compile from '../types')"
+   ],
+   "verification": "lint 0w/0e (26 files); typecheck clean; test 46/46 passed (8 files, +28 new); build green; prettier clean on new files only",
+   "notes": "All PRD \u00a77 contracts typed and checked in under src/types/ (barrel at src/types/index.ts): geometry primitives (Vec3/Rotation/Facing + FACING_VEC/rotY, Y-thrust conventions from the proven M0-T2 vec), units (MM, deck 3.0 clear/3.2 pitch, standard door 0.9\u00d72.0 @ 1.0 m center, deckFloorYFor), ShipSpec/DeckSpec/ModuleRef (decks ordered nose\u2192aft, yPosition explicit, ref offset.y reserved 0 = floor-pinned), kit manifest (KitModule: dimensions/doorSockets/lightSockets/equipmentSlots/collisionHint + DoorSocket position/facing/deck-offset; doorCenterDeckOffsetM is the contract's deck offset; authoring frame: floor y=0, XZ footprint centered), scene graph (DeckNode: merged geometry groups by material slot, instance batches, named interactive transforms, per-deck collision hull), material slots (9-name vocabulary + MaterialSlots<T> mapped type where omission = compile error + runtime assertMaterialSlotsComplete for JSON themes \u2014 M1-T4 CI hook and M2-T7 harness build on it). Kit-manifest integrity checker (kitManifestProblems/assertKitManifestIntegrity) validates authoring frame incl. socket flush within the M0-T2 measured \u00b10.5 mm budget (imports SEAM_TOLERANCES \u2014 no re-derivation). 28 new tests pin every helper. No three.js in the contracts (manifest-level; renderer attaches buffers by id at M3). NEXT: M0-T5 (canonical fixtures \u2014 Patrol/Long-Haul/Science + pathological stress spec), which unlocks M0-T6 + M1-T3."
+  },
+  "M0-T5": {
+   "status": "complete",
+   "date": "2026-09-07",
+   "title": "Define canonical test ships & check them in: (a) Patrol 5-deck, (b) Long-Haul stretch, (c) Science retrofit, (d) pathological offset-hatch stress spec",
+   "files_modified": [
+    "src/fixtures/layout.ts",
+    "src/fixtures/patrol.ts",
+    "src/fixtures/longHaul.ts",
+    "src/fixtures/science.ts",
+    "src/fixtures/stress.ts",
+    "src/fixtures/registry.ts",
+    "src/fixtures/index.ts",
+    "src/fixtures/fixtures.test.ts"
+   ],
+   "tests_added": [
+    "src/fixtures/fixtures.test.ts \u2014 24 tests: registry order/lookup/expectValid split; identity fields; unique deck ids + populated decks; room-module-id vocabulary (spine never referenced); monotone nose\u2192aft floor descent; JSON round-trip (preset-JSON ready); patrol 5-deck hero sequence + crew/galley spawn deck at index 1; long-haul 6-deck storage x2; science ops-module retrofit; canonical grid y = deckFloorYFor(i); every ref floor-pinned flush at atSpine() pose; attach-geometry spot checks (0.7 + depth/2); stress rig control deck clean, 5 defect categories on rig-1..rig-4 at declared magnitudes (10 mm / 25 mm / 200 mm / 0.2 m / 50 mm), floor-pin violation isolated"
+   ],
+   "verification": "lint 0w/0e (34 files); typecheck clean; test 70/70 passed (9 files, +24); build green (321ms); prettier clean on src/fixtures/",
+   "notes": "Fixture layout convention (for M1-T3/M3): spine shaft center at deck-local origin on EVERY deck (continuous vertical run); rooms attach rot-0 to the +z face, offset z = SPINE_HALF_M 0.7 + depth/2, offset.y = 0 (floor-pinned); door centers land at (0, 1.0, 0.7) = spine band +z socket. ROOM_FOOTPRINTS table = contract-level bounds M2 must reproduce (M2-T7 gate), stand-in until the real KitManifest. stress.ts rig-3 pair arithmetic: engineering high-hatch local [2.25, 1.2, 0.6] (+x) vs ops side-door local [-1.95, 1.0, -1.0] (-x) coincide in XZ at 4.2 m x / 1.6 m z center offset \u2014 200 mm vertical step. expectValid:false = must-reject for M1-T3 validator + M0-T6 stubs; expectValid fixtures must pass. Socket-residual math itself is M1-T3, not this task."
   }
+ }
 }
