@@ -1,0 +1,185 @@
+/**
+ * M0-T6 — the PRD §8 [auto] closed-world invariant registry.
+ *
+ * PRD §8 lists six machine-checkable ([auto]) invariants plus three human
+ * ([review]) ones. This module declares the six [auto] invariants as a
+ * typed, ordered target set — each with the §8 wording, the tolerance that
+ * applies (imported from the M0-T2 seam spike's SEAM_TOLERANCES — measured
+ * constants, never re-derived), and the milestone that owns the real check:
+ *
+ *   bullet 1 (seams-watertight)  → M3-T2 assembler geometry test
+ *   bullet 2 (hatch-alignment)   → M1-T3 spec validator (kit sockets)
+ *   bullet 3 (spine-connectivity)→ M1-T3 resolver refines the M0-T6
+ *                                  spec-level live check (see checks.ts)
+ *   bullet 4 (collision-match)   → M3-T3 per-deck hull builder
+ *   bullet 5 (spawn-inside)      → M3-T6 spawn selection (spec facet live
+ *                                  at M0-T6; containment half deferred)
+ *   bullet 6 (room-lit)          → M2-T7 kit test harness (lightSockets)
+ *
+ * A check is either:
+ *  - `live` — the M0-T6 harness runs a real spec-level check today
+ *    (see src/invariants/checks.ts for the implementation), or
+ *  - `stub` — a declared TARGET: the fixture data available at M0 does not
+ *    carry what the check needs (assembled geometry, kit door sockets,
+ *    collision hulls, light sockets), so the harness reports it `deferred`
+ *    with its owner and required input. The owner milestone replaces the
+ *    stub with a real check; the registry entry is the contract it slots
+ *    into. BUILD_PLAN M0 gate: "invariant test harness runs (may fail —
+ *    that's fine, they're targets)".
+ */
+
+import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
+import type { ShipSpec } from '../types'
+
+/** The six PRD §8 [auto] invariants, in the order §8 lists them. */
+export const INVARIANT_IDS = [
+  'seams-watertight',
+  'hatch-alignment',
+  'spine-connectivity',
+  'collision-match',
+  'spawn-inside',
+  'room-lit',
+] as const
+
+/** One of the six [auto] invariants. */
+export type InvariantId = (typeof INVARIANT_IDS)[number]
+
+/** A verdict a live check computes for one fixture. */
+export type CheckStatus = 'pass' | 'fail'
+
+/** Result of running one invariant over one fixture. */
+export type RunStatus = CheckStatus | 'deferred'
+
+/** The tolerance a §8 bullet fixes, when it fixes a number. */
+export interface LimitSpec {
+  value: number
+  unit: 'mm' | 'm' | 'count'
+  /** '<' = strictly under the cap; '<=' / '>=' = may touch it. */
+  relation: '<' | '<=' | '>='
+}
+
+/** One declared [auto] invariant: metadata + live-check wiring contract. */
+export interface AutoInvariant {
+  /** Stable invariant id ('seams-watertight', …). */
+  id: InvariantId
+  /** Position in the PRD §8 [auto] list: 1..6. */
+  bullet: 1 | 2 | 3 | 4 | 5 | 6
+  /** Short human title. */
+  title: string
+  /** The §8 requirement this invariant enforces. */
+  requirement: string
+  /** Fixed tolerance where §8 / M0-T2 fix one; absent = qualitative. */
+  limit?: LimitSpec
+  /** 'live' = the harness runs a real check at M0; 'stub' = declared target. */
+  status: 'live' | 'stub'
+  /** The milestone/task that owns the real (full) check. */
+  owner: string
+  /** The input the full check needs that M0 fixtures do not yet carry. */
+  needs?: string
+  /** Free-text note on scope / refinement (coarse-rule limits, halves). */
+  note?: string
+}
+
+/** The six declared invariants, in §8 order (stable iteration order). */
+export const AUTO_INVARIANTS: readonly AutoInvariant[] = [
+  {
+    id: 'seams-watertight',
+    bullet: 1,
+    title: 'Module seams are watertight',
+    requirement:
+      'For every door-socket join and bulkhead meet, the gap is < 2 mm in spec space (assembler geometry test).',
+    limit: {
+      value: SEAM_TOLERANCES.watertightGapMm,
+      unit: 'mm',
+      relation: '<',
+    },
+    status: 'stub',
+    owner: 'M3-T2',
+    needs:
+      'assembler geometry (mating faces resolved at every door-socket join and bulkhead meet)',
+    note: 'M0-T2 proved socket-solved joins measure 0.000 mm — the join math is never the error source; this invariant guards the ASSEMBLER output, which does not exist before M3.',
+  },
+  {
+    id: 'hatch-alignment',
+    bullet: 2,
+    title: 'Hatch alignment',
+    requirement:
+      "Every module's door sockets land on the spine or a mating module within 5 mm; no dangling sockets (spec validator).",
+    limit: {
+      value: SEAM_TOLERANCES.hatchAlignMm,
+      unit: 'mm',
+      relation: '<=',
+    },
+    status: 'stub',
+    owner: 'M1-T3',
+    needs:
+      'kit-manifest door sockets + the socket resolver (mating pairs incl. non-standard door centers such as engineering\u2019s 1.2 m high-hatch)',
+    note: 'The coarse M0-T6 spine-seat rule (checks.ts) covers the canonical rot-0 spine-door half at spec level; every other socket (side doors, module-to-module mates, non-standard heights) needs real kit socket data.',
+  },
+  {
+    id: 'spine-connectivity',
+    bullet: 3,
+    title: 'The spine connects every deck',
+    requirement:
+      'The ladder/crawl run is continuous from the crew deck to the head and to engineering (graph reachability test on the spec).',
+    status: 'live',
+    owner: 'M1-T3',
+    note: 'Live at M0-T6 as the spec-level run-continuity check: every deck must seat a module flush on the spine band (within the 5 mm hatch cap) on the canonical floor grid, with head / crew / engineering endpoints. M1-T3 refines it with the socket-resolved module graph.',
+  },
+  {
+    id: 'collision-match',
+    bullet: 4,
+    title: 'Collision hull matches visible geometry',
+    requirement:
+      'The per-deck collision hull matches visible geometry within 10 cm per deck.',
+    limit: { value: 0.1, unit: 'm', relation: '<=' },
+    status: 'stub',
+    owner: 'M3-T3',
+    needs:
+      'per-deck collision hulls and the assembled geometry they must match (M3-T1 / M3-T3 output)',
+  },
+  {
+    id: 'spawn-inside',
+    bullet: 5,
+    title: 'Spawn point is inside the crew deck',
+    requirement: 'The spawn point is inside the crew deck, not intersecting geometry.',
+    status: 'live',
+    owner: 'M3-T6',
+    note: 'Spec facet live at M0-T6: the spawn deck (index 1, by the deck-plan contract) exists and hosts a galley seated at the foot of the spine. The geometric containment half (inside the deck, clear of hulls) needs collision hulls and is M3-T6\u2019s.',
+  },
+  {
+    id: 'room-lit',
+    bullet: 6,
+    title: 'Every module instance has \u2265 1 light fixture',
+    requirement:
+      'Every module instance has \u2265 1 light fixture (no legally-dark room in the spec).',
+    limit: { value: 1, unit: 'count', relation: '>=' },
+    status: 'stub',
+    owner: 'M2-T7',
+    needs: 'kit-manifest lightSockets per module (authored at M2)',
+  },
+]
+
+/** Look up an invariant by id; throws on unknown ids (typos surface early). */
+export function getAutoInvariant(id: InvariantId): AutoInvariant {
+  const inv = AUTO_INVARIANTS.find((x) => x.id === id)
+  if (!inv) throw new Error(`invariants: no PRD \u00a78 [auto] invariant "${id}"`)
+  return inv
+}
+
+/** Convenience: the invariants whose status is 'live' (have real checks). */
+export function liveInvariants(): AutoInvariant[] {
+  return AUTO_INVARIANTS.filter((x) => x.status === 'live')
+}
+
+/** Convenience: the declared targets — stubs awaiting their owner milestone. */
+export function stubInvariants(): AutoInvariant[] {
+  return AUTO_INVARIANTS.filter((x) => x.status === 'stub')
+}
+
+/**
+ * Shape a live check must have: pure spec in, verdict out. Later milestones
+ * implement stub bodies against this same shape (spec-only inputs that need
+ * assembled data receive it via the spec's fixtures at their milestone).
+ */
+export type InvariantCheck = (spec: ShipSpec) => { status: CheckStatus; detail: string }
