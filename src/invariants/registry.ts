@@ -8,9 +8,12 @@
  * constants, never re-derived), and the milestone that owns the real check:
  *
  *   bullet 1 (seams-watertight)  → M3-T2 assembler geometry test
- *   bullet 2 (hatch-alignment)   → M1-T3 spec validator (kit sockets)
+ *   bullet 2 (hatch-alignment)   → M1-T3 spec validator — LIVE at M1-T3
+ *                                  (socket-resolved, see checks.ts)
  *   bullet 3 (spine-connectivity)→ M1-T3 resolver refines the M0-T6
  *                                  spec-level live check (see checks.ts)
+ *                                  and re-derives it socket-resolved in the
+ *                                  spec validator (src/validation/)
  *   bullet 4 (collision-match)   → M3-T3 per-deck hull builder
  *   bullet 5 (spawn-inside)      → M3-T6 spawn selection (spec facet live
  *                                  at M0-T6; containment half deferred)
@@ -110,11 +113,9 @@ export const AUTO_INVARIANTS: readonly AutoInvariant[] = [
       unit: 'mm',
       relation: '<=',
     },
-    status: 'stub',
+    status: 'live',
     owner: 'M1-T3',
-    needs:
-      'kit-manifest door sockets + the socket resolver (mating pairs incl. non-standard door centers such as engineering\u2019s 1.2 m high-hatch)',
-    note: 'The coarse M0-T6 spine-seat rule (checks.ts) covers the canonical rot-0 spine-door half at spec level; every other socket (side doors, module-to-module mates, non-standard heights) needs real kit socket data.',
+    note: 'Live at M1-T3 (checks.ts checkHatchAlignment): the socket resolver measures every door socket in world space against the M0-T2 channels and caps: a room spine-door must land on its deck spine-band socket within 5 mm on lateral/vertical/face; module-to-module pairs whose wall faces engage and openings overlap must align (rig-3 1.2 m high-hatch vs 1.0 m door = 200 mm step is caught as the misaligned pair it is); a door opening onto another module blank wall is dangling. Unjoined sockets that engage nothing are legal (blanked; the real ships side doors). Runs over the fixture-time CONTRACT_KIT until M2 supplies the authored manifest.',
   },
   {
     id: 'spine-connectivity',
@@ -124,7 +125,7 @@ export const AUTO_INVARIANTS: readonly AutoInvariant[] = [
       'The ladder/crawl run is continuous from the crew deck to the head and to engineering (graph reachability test on the spec).',
     status: 'live',
     owner: 'M1-T3',
-    note: 'Live at M0-T6 as the spec-level run-continuity check: every deck must seat a module flush on the spine band (within the 5 mm hatch cap) on the canonical floor grid, with head / crew / engineering endpoints. M1-T3 refines it with the socket-resolved module graph.',
+    note: 'Live at M0-T6 as the spec-level run-continuity check: every deck must seat a module flush on the spine band (within the 5 mm hatch cap) on the canonical floor grid, with head / crew / engineering endpoints. M1-T3 refined the seat rule socket-resolved (door centers vs the band socket, src/validation/validator.ts spineConnectivityProblems) — the coarse pose rule and the resolver give identical verdicts on all four fixtures.',
   },
   {
     id: 'collision-match',

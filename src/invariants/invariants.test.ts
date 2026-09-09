@@ -10,13 +10,15 @@
  *    vertical / normal-gap deviations at the spine door) exactly, incl.
  *    the stress rig's declared defect magnitudes (10 / 25 / 200 mm) and
  *    the 50 mm off-grid deck floor;
- *  - the live checks (spine-connectivity, spawn-inside spec facet) PASS on
- *    the three real ships and FAIL the stress rig at the declared decks;
- *  - stub invariants (seams-watertight, hatch-alignment, collision-match,
- *    room-lit) are declared targets: the harness reports them 'deferred'
- *    with their owning milestone — the input they need (assembled
- *    geometry, kit sockets, hulls, light sockets) does not exist until
- *    M1-T3 / M2-T7 / M3-T2 / M3-T3 / M3-T6 land;
+ *  - the live checks PASS on the three real ships and FAIL the stress rig
+ *    at the declared decks: hatch-alignment (socket-resolved, LIVE at
+ *    M1-T3), spine-connectivity and spawn-inside spec facet (live since
+ *    M0-T6);
+ *  - stub invariants (seams-watertight, collision-match, room-lit) are
+ *    declared targets: the harness reports them 'deferred' with their
+ *    owning milestone — the input they need (assembled geometry, collision
+ *    hulls, light sockets) does not exist until M2-T7 / M3-T2 / M3-T3 /
+ *    M3-T6 land;
  *  - the harness runs over all four fixtures without throwing and returns
  *    attributable runs (fixture × invariant).
  *
@@ -29,6 +31,7 @@ import {
   AUTO_INVARIANTS,
   INVARIANT_IDS,
   LIVE_CHECKS,
+  checkHatchAlignment,
   checkSpineConnectivity,
   checkSpawnInsideSpec,
   deckGridErrorMm,
@@ -90,7 +93,14 @@ function miniSpec(roomPerDeck: RoomModuleId[]): ShipSpec {
 const CANONICAL_THREE = miniSpec(['head', 'galley', 'engineering'])
 
 /** Expected run-status rows: [seams, hatch, spine, collision, spawn, lit]. */
-const DEFERRED_ROW = ['deferred', 'deferred'] as const
+const DEFERRED_ROW = [
+  'deferred',
+  'pass',
+  'pass',
+  'deferred',
+  'pass',
+  'deferred',
+] as const
 
 /* ---------- registry ----------------------------------------------- */
 
@@ -127,14 +137,14 @@ describe('invariant registry (PRD §8 [auto])', () => {
     expect(SEAM_TOLERANCES.hatchAlignMm).toBe(5)
   })
 
-  it('marks the two spec-level checks live and the other four as stubs', () => {
+  it('marks the three spec-level checks live and the other three as stubs', () => {
     expect(liveInvariants().map((x) => x.id)).toEqual([
+      'hatch-alignment',
       'spine-connectivity',
       'spawn-inside',
     ])
     expect(stubInvariants().map((x) => x.id)).toEqual([
       'seams-watertight',
-      'hatch-alignment',
       'collision-match',
       'room-lit',
     ])
@@ -310,6 +320,33 @@ describe('live checks on the canonical fixtures', () => {
     expect(result.detail).toMatch(/50\.0 mm off the canonical grid/)
   })
 
+  it('hatch-alignment (socket-resolved) passes the real ships', () => {
+    for (const f of expectValidFixtures()) {
+      const result = checkHatchAlignment(f.spec)
+      expect(result.status).toBe('pass')
+      expect(result.detail).toMatch(
+        /room spine-doors land on their deck spine-band sockets/,
+      )
+      expect(result.detail).toMatch(/side socket/)
+      expect(result.detail).toMatch(/blanked/)
+    }
+    // Patrol: 5 rooms → 5 spine doors landed; 4 side sockets legally blanked.
+    expect(checkHatchAlignment(PATROL_SPEC).detail).toMatch(/all 5 room spine-doors/)
+    expect(checkHatchAlignment(PATROL_SPEC).detail).toMatch(/4 side sockets unjoined/)
+  })
+
+  it('hatch-alignment fails the stress rig at every defect deck', () => {
+    const result = checkHatchAlignment(STRESS_SPEC)
+    expect(result.status).toBe('fail')
+    expect(result.detail).toContain('rig-1') // 10 mm proud (open seam)
+    expect(result.detail).toContain('rig-2') // 25 mm lateral
+    expect(result.detail).toContain('rig-3') // 200 mm high-hatch step pair
+    expect(result.detail).toMatch(/200\.0 mm vertically \(door-center step\)/)
+    expect(result.detail).toContain('rig-4') // 200 mm floor-pin drift
+    // The control deck is never the problem.
+    expect(result.detail).not.toContain('rig-0')
+  })
+
   it('spawn-inside (spec facet) passes on the real ships', () => {
     for (const f of expectValidFixtures()) {
       const result = checkSpawnInsideSpec(f.spec)
@@ -336,6 +373,31 @@ describe('live checks on synthetic mini-specs (not fixture-shaped)', () => {
     expect(result.detail).toMatch(/continuous across all 3 decks/)
     expect(result.detail).toContain('engineering (deck 2)')
     expect(checkSpawnInsideSpec(CANONICAL_THREE).status).toBe('pass')
+    expect(checkHatchAlignment(CANONICAL_THREE).status).toBe('pass')
+  })
+
+  it('hatch-alignment fails when a spine door is pushed off its band socket', () => {
+    const pushed: ShipSpec = {
+      ...CANONICAL_THREE,
+      decks: [
+        CANONICAL_THREE.decks[0],
+        {
+          ...CANONICAL_THREE.decks[1],
+          modules: [
+            {
+              moduleId: 'galley',
+              rotation: 0,
+              offset: [25e-3, 0, spineAttachOffsetZ('galley')],
+            },
+          ],
+        },
+        CANONICAL_THREE.decks[2],
+      ],
+    }
+    const result = checkHatchAlignment(pushed)
+    expect(result.status).toBe('fail')
+    expect(result.detail).toContain('galley#0')
+    expect(result.detail).toMatch(/25\.0 mm off the spine socket center laterally/)
   })
 
   it('fails when the crew-deck galley is pushed 25 mm laterally off the spine', () => {
@@ -419,24 +481,18 @@ describe('invariant harness', () => {
     }
   })
 
-  it('real ships: seam/hatch/collision/lit deferred, spine+spawn pass', () => {
+  it('real ships: seams/collision/lit deferred; hatch+spine+spawn pass', () => {
     for (const fixture of expectValidFixtures()) {
       const runs = runInvariantHarness(fixture)
-      expect(runs.map((r) => r.status)).toEqual([
-        ...DEFERRED_ROW, // seams-watertight, hatch-alignment (M3-T2 / M1-T3 targets)
-        'pass', // spine-connectivity (live)
-        'deferred', // collision-match (M3-T3 target)
-        'pass', // spawn-inside spec facet (live)
-        'deferred', // room-lit (M2-T7 target)
-      ])
+      expect(runs.map((r) => r.status)).toEqual([...DEFERRED_ROW])
     }
   })
 
-  it('stress rig: spine-connectivity and spawn-inside fail, targets deferred', () => {
+  it('stress rig: hatch/spine/spawn fail, remaining targets deferred', () => {
     const runs = runInvariantHarness(getShipFixture('stress'))
     expect(runs.map((r) => r.status)).toEqual([
       'deferred', // seams-watertight — the 10 mm open seam is M3-T2's assembled check
-      'deferred', // hatch-alignment — socket-level residual math is M1-T3
+      'fail', // hatch-alignment — socket-resolved (M1-T3): rig-1/2/3/4 all fail
       'fail', // spine-connectivity — live spec-level run continuity
       'deferred',
       'fail', // spawn-inside — no crew deck at index 1
@@ -447,7 +503,6 @@ describe('invariant harness', () => {
   it('deferred runs name the owning milestone and the missing input', () => {
     const owners: Record<string, string> = {
       'seams-watertight': 'M3-T2',
-      'hatch-alignment': 'M1-T3',
       'collision-match': 'M3-T3',
       'room-lit': 'M2-T7',
     }
@@ -463,10 +518,16 @@ describe('invariant harness', () => {
 
   it('the full harness is 24 runs; per-invariant columns split valid/invalid', () => {
     expect(runInvariantHarnessAll()).toHaveLength(24)
+    const hatchRuns = runsForInvariant('hatch-alignment')
+    expect(hatchRuns).toHaveLength(4)
+    expect(hatchRuns.filter((r) => r.status === 'pass')).toHaveLength(3)
+    expect(hatchRuns.filter((r) => r.status === 'fail')).toHaveLength(1)
     const spineRuns = runsForInvariant('spine-connectivity')
     expect(spineRuns).toHaveLength(4)
     expect(spineRuns.filter((r) => r.status === 'pass')).toHaveLength(3)
     expect(spineRuns.filter((r) => r.status === 'fail')).toHaveLength(1)
+    expect(runInvariantById('hatch-alignment', 'patrol').status).toBe('pass')
+    expect(runInvariantById('hatch-alignment', 'stress').status).toBe('fail')
     expect(runInvariantById('spine-connectivity', 'stress').status).toBe('fail')
     expect(runInvariantById('spawn-inside', 'patrol').status).toBe('pass')
   })

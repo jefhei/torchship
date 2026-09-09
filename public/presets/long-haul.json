@@ -1,0 +1,86 @@
+{
+  "id": "long-haul",
+  "label": "Long-Haul",
+  "description": "Stretched cargo variant: Patrol plus a second aft storage deck (six decks). Proves repeated instances of one module type (storage ×2) assemble from one spec.",
+  "expectValid": true,
+  "spec": {
+    "classId": "hound",
+    "name": "Vagabond",
+    "registry": "HCS-461",
+    "seed": 2,
+    "decks": [
+      {
+        "id": "head",
+        "label": "Head — bridge",
+        "yPosition": 0,
+        "modules": [
+          {
+            "moduleId": "head",
+            "rotation": 0,
+            "offset": [0, 0, 2.5]
+          }
+        ]
+      },
+      {
+        "id": "crew",
+        "label": "Crew deck — galley & bunks",
+        "yPosition": -3.2,
+        "modules": [
+          {
+            "moduleId": "galley",
+            "rotation": 0,
+            "offset": [0, 0, 3.2]
+          }
+        ]
+      },
+      {
+        "id": "ops",
+        "label": "Ops deck — airlock, suit locker, med bay",
+        "yPosition": -6.4,
+        "modules": [
+          {
+            "moduleId": "ops",
+            "rotation": 0,
+            "offset": [0, 0, 3]
+          }
+        ]
+      },
+      {
+        "id": "engineering",
+        "label": "Engineering — reactor & drive glow",
+        "yPosition": -9.600000000000001,
+        "modules": [
+          {
+            "moduleId": "engineering",
+            "rotation": 0,
+            "offset": [0, 0, 3.0999999999999996]
+          }
+        ]
+      },
+      {
+        "id": "cargo-a",
+        "label": "Cargo hold A — container tie-downs",
+        "yPosition": -12.8,
+        "modules": [
+          {
+            "moduleId": "storage",
+            "rotation": 0,
+            "offset": [0, 0, 3.7]
+          }
+        ]
+      },
+      {
+        "id": "cargo-b",
+        "label": "Cargo hold B — spares & workshop stores",
+        "yPosition": -16,
+        "modules": [
+          {
+            "moduleId": "storage",
+            "rotation": 0,
+            "offset": [0, 0, 3.7]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,10 +1,11 @@
 /**
- * M0-T6 — live spec-level implementations of two PRD §8 [auto] invariants.
+ * M0-T6 — live spec-level implementations of PRD §8 [auto] invariants.
  *
- * The M0 fixture data (ShipSpec + the layout contract) supports REAL checks
- * for two bullets today; the other four are declared targets in registry.ts
+ * The fixture data (ShipSpec + the layout contract + the M1-T3 socket
+ * resolver over the fixture-time CONTRACT_KIT) supports REAL checks for
+ * three bullets today; the other three are declared targets in registry.ts
  * until their owner milestone supplies the missing input (assembled
- * geometry, kit sockets, hulls, light sockets):
+ * geometry, collision hulls, light sockets):
  *
  *  - checkSpineConnectivity  (§8 bullet 3, 'spine-connectivity'): the spine
  *    run is continuous when every deck seats a module flush on the shaft
@@ -16,8 +17,20 @@
  *    module, deck 1 exists (the crew deck, by the deck-plan contract), and
  *    some deck hosts engineering. With the run continuous across 0..N−1,
  *    the crew→head and crew→engineering paths along the shaft exist by
- *    graph reachability over deck adjacency. This is the coarse spec-level
- *    half; M1-T3 refines it with the socket-resolved module graph.
+ *    graph reachability over deck adjacency. M1-T3 refined the seat rule
+ *    socket-resolved (src/validation/validator.ts spineConnectivityProblems
+ *    — door centers vs the band socket); both give identical verdicts.
+ *
+ *  - checkHatchAlignment      (§8 bullet 2, 'hatch-alignment', LIVE at
+ *    M1-T3): every door socket measured at socket level against the M0-T2
+ *    channels and caps (validator hatchAlignmentProblems over
+ *    CONTRACT_KIT): room spine-doors must land on their deck spine-band
+ *    sockets within the 5 mm cap on every channel; module-to-module pairs
+ *    whose wall faces engage and openings overlap must align (rig-3's
+ *    200 mm door-center step is caught as the misaligned pair it is); a
+ *    door opening onto another module's blank wall is dangling. Unjoined
+ *    sockets that engage nothing are legal spec (blanked — the real ships'
+ *    side doors).
  *
  *  - checkSpawnInsideSpec    (§8 bullet 5, 'spawn-inside', spec facet): the
  *    spawn deck (index 1 by the deck-plan contract — PRD §6 "spawn on the
@@ -26,8 +39,8 @@
  *    inside the deck, not intersecting hulls) needs collision geometry and
  *    is M3-T6's.
  *
- * Both are wired into the harness via LIVE_CHECKS; a stub invariant has no
- * entry here, which is what makes the harness report it `deferred`.
+ * All three are wired into the harness via LIVE_CHECKS; a stub invariant
+ * has no entry here, which is what makes the harness report it `deferred`.
  */
 
 import type { InvariantCheck, InvariantId } from './registry'
@@ -40,6 +53,7 @@ import {
 } from './specAnalysis'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import type { ShipSpec } from '../types'
+import { CONTRACT_KIT, doorTallies, hatchAlignmentProblems } from '../validation'
 
 /**
  * §8 bullet 3 live check. Fails when the spine run is broken at any deck
@@ -148,11 +162,37 @@ export const checkSpawnInsideSpec: InvariantCheck = (spec: ShipSpec) => {
 }
 
 /**
+ * §8 bullet 2 live check (LIVE at M1-T3). Socket-resolved over the
+ * fixture-time CONTRACT_KIT (the authored M2 manifest replaces it when it
+ * lands): every door socket is measured against the M0-T2 channels and the
+ * 5 mm hatch cap. Fails when a room spine-door does not land on its deck
+ * spine-band socket, an engaged module-to-module pair is misaligned, or a
+ * door opens onto another module's blank wall. Unjoined sockets that engage
+ * nothing are legal (blanked) and counted in the pass detail.
+ */
+export const checkHatchAlignment: InvariantCheck = (spec: ShipSpec) => {
+  const problems = hatchAlignmentProblems(spec, CONTRACT_KIT)
+  if (problems.length > 0) {
+    return { status: 'fail', detail: problems.join('; ') }
+  }
+  const { spineDoors, sideDoors } = doorTallies(spec, CONTRACT_KIT)
+  return {
+    status: 'pass',
+    detail:
+      `all ${spineDoors} room spine-doors land on their deck spine-band sockets within ` +
+      `${SEAM_TOLERANCES.hatchAlignMm} mm on every channel (lateral/vertical/face); ` +
+      `${sideDoors} side socket${sideDoors === 1 ? '' : 's'} unjoined ` +
+      `(blanked — legal by the kit contract); no misaligned or wall-blocked mating pairs`,
+  }
+}
+
+/**
  * The live checks by invariant id. A stub invariant deliberately has NO
  * entry here; the harness reports stubs as `deferred` with their owner.
  * Live ids must equal liveInvariants() ids — pinned by invariants.test.ts.
  */
 export const LIVE_CHECKS: Partial<Record<InvariantId, InvariantCheck>> = {
+  'hatch-alignment': checkHatchAlignment,
   'spine-connectivity': checkSpineConnectivity,
   'spawn-inside': checkSpawnInsideSpec,
 }

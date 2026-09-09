@@ -1,0 +1,79 @@
+{
+  "id": "stress",
+  "label": "Offset-hatch stress",
+  "description": "Negative fixture: five-deck rig carrying the M0-T2 decision-3 reject cases (≥10 mm offsets, 1.2 m high-hatch mated to a 1.0 m door, floor-pin + deck-grid violations) plus one clean control deck. The validator must reject it; see STRESS_DEFECTS in stress.ts.",
+  "expectValid": false,
+  "spec": {
+    "classId": "hound",
+    "name": "Offspec",
+    "registry": "QA-RIG-1",
+    "seed": 0,
+    "decks": [
+      {
+        "id": "rig-0",
+        "label": "Rig 0 — control (clean spine join)",
+        "yPosition": 0,
+        "modules": [
+          {
+            "moduleId": "head",
+            "rotation": 0,
+            "offset": [0, 0, 2.5]
+          }
+        ]
+      },
+      {
+        "id": "rig-1",
+        "label": "Rig 1 — 10 mm normal offset (open seam)",
+        "yPosition": -3.2,
+        "modules": [
+          {
+            "moduleId": "head",
+            "rotation": 0,
+            "offset": [0, 0, 2.51]
+          }
+        ]
+      },
+      {
+        "id": "rig-2",
+        "label": "Rig 2 — 25 mm lateral offset (hatch misalignment)",
+        "yPosition": -6.4,
+        "modules": [
+          {
+            "moduleId": "ops",
+            "rotation": 0,
+            "offset": [0.025, 0, 3]
+          }
+        ]
+      },
+      {
+        "id": "rig-3",
+        "label": "Rig 3 — high-hatch 1.2 m ↔ standard door 1.0 m",
+        "yPosition": -9.600000000000001,
+        "modules": [
+          {
+            "moduleId": "engineering",
+            "rotation": 0,
+            "offset": [0, 0, 3.0999999999999996]
+          },
+          {
+            "moduleId": "ops",
+            "rotation": 0,
+            "offset": [4.2, 0, 4.699999999999999]
+          }
+        ]
+      },
+      {
+        "id": "rig-4",
+        "label": "Rig 4 — floor-pin violation + off-grid deck Y",
+        "yPosition": -12.75,
+        "modules": [
+          {
+            "moduleId": "galley",
+            "rotation": 0,
+            "offset": [0, 0.2, 3.2]
+          }
+        ]
+      }
+    ]
+  }
+}

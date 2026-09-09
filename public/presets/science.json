@@ -1,0 +1,74 @@
+{
+  "id": "science",
+  "label": "Science",
+  "description": "Retrofit surveyor: the aft hold is replaced by a science deck reusing the ops module as the expanded med bay / sensor suite. Proves one kit module serves two roles (ops ×2).",
+  "expectValid": true,
+  "spec": {
+    "classId": "hound",
+    "name": "Surveyor",
+    "registry": "HCS-533",
+    "seed": 3,
+    "decks": [
+      {
+        "id": "head",
+        "label": "Head — bridge",
+        "yPosition": 0,
+        "modules": [
+          {
+            "moduleId": "head",
+            "rotation": 0,
+            "offset": [0, 0, 2.5]
+          }
+        ]
+      },
+      {
+        "id": "crew",
+        "label": "Crew deck — galley & bunks",
+        "yPosition": -3.2,
+        "modules": [
+          {
+            "moduleId": "galley",
+            "rotation": 0,
+            "offset": [0, 0, 3.2]
+          }
+        ]
+      },
+      {
+        "id": "ops",
+        "label": "Ops deck — airlock & suit locker",
+        "yPosition": -6.4,
+        "modules": [
+          {
+            "moduleId": "ops",
+            "rotation": 0,
+            "offset": [0, 0, 3]
+          }
+        ]
+      },
+      {
+        "id": "science",
+        "label": "Science deck — expanded med bay & sensor suite",
+        "yPosition": -9.600000000000001,
+        "modules": [
+          {
+            "moduleId": "ops",
+            "rotation": 0,
+            "offset": [0, 0, 3]
+          }
+        ]
+      },
+      {
+        "id": "engineering",
+        "label": "Engineering — reactor & drive glow",
+        "yPosition": -12.8,
+        "modules": [
+          {
+            "moduleId": "engineering",
+            "rotation": 0,
+            "offset": [0, 0, 3.0999999999999996]
+          }
+        ]
+      }
+    ]
+  }
+}
