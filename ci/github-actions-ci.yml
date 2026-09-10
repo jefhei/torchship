@@ -1,0 +1,61 @@
+# INACTIVE — awaiting a workflow-scoped credential (M1-T4).
+#
+# GitHub refuses any push that creates or updates files under
+# `.github/workflows/` unless the credential carries the `workflow` scope
+# (classic PAT) or `Workflows: Read and write` (fine-grained PAT). The check is
+# server-side — no git or API workaround exists. This machine's credential is a
+# classic PAT with `repo` scope only (see ~/notes/github-token-strategy.md), so
+# M1-T4 authored the CI workflow here, outside `.github/workflows/`.
+#
+# TO ACTIVATE (from a credential with the Workflows permission):
+#   git mv ci/github-actions-ci.yml .github/workflows/ci.yml
+#   git commit -m "ci: activate the GitHub Actions workflow"
+#   git push
+#
+# The file is otherwise a normal, ready-to-run workflow.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  static:
+    name: Lint, format, types, material slots
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run check:slots
+
+  test:
+    name: Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run test
+
+  build:
+    name: Vite build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
