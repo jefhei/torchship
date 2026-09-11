@@ -1,0 +1,717 @@
+/**
+ * M2-T1 — parametric part builders for the kit primitives.
+ *
+ * Each primitive is authored ONCE here as a pure function from parameters to
+ * a list of `KitPart`s: axis-aligned boxes and cylinders in the primitive's
+ * local frame, each tagged with the §4 material slot it draws from. Nothing
+ * three.js-specific — the R3F layer (src/kit/render/) maps parts onto meshes,
+ * the M3-T7 merge/instance pass consumes the same lists, and the seam/hatch
+ * checks can never see freehand geometry (BUILD_PLAN execution rule 8).
+ *
+ * Frames. The M1-T2 kit authoring frame applies to whole MODULES (floor at
+ * local y = 0, footprint centred on the origin in XZ). It applies to the
+ * floor-standing primitives too — bulkhead, ladder segment, locker, couch,
+ * table and coffee station grow upward from y = 0. Fixtures that hang on a
+ * wall or ceiling (conduit run, panel light, hatch, screen, heat shield) are
+ * authored about their own centre and PLACED by the caller; the hatch is
+ * socket-centred because it seals a DoorSocket (position = door centre).
+ *
+ * Every computed coordinate is normalized through `n0` (−0 → 0): vitest's
+ * Object.is-strict matchers treat −0 and +0 as distinct, and the repo
+ * normalizes on every grid-math return path (src/types/geometry.ts,
+ * src/types/units.ts).
+ */
+
+import { MATERIAL_SLOTS } from '../types'
+import type { Aabb3, MaterialSlot, Vec3 } from '../types'
+import type { BoxPart, CylinderPart, KitPart, PartAxis } from './types'
+
+/** Tolerance for "is this dimension effectively zero" checks, meters. */
+const EPS = 1e-9
+
+/** Normalize −0 → 0 so downstream Object.is-strict comparisons stay clean. */
+function n0(x: number): number {
+  return x === 0 ? 0 : x
+}
+
+function box(materialSlot: MaterialSlot, size: Vec3, position: Vec3): BoxPart {
+  return { kind: 'box', materialSlot, size, position }
+}
+
+function cyl(
+  materialSlot: MaterialSlot,
+  radius: number,
+  length: number,
+  axis: PartAxis,
+  position: Vec3,
+): CylinderPart {
+  return { kind: 'cylinder', materialSlot, radius, length, axis, position }
+}
+
+function requirePositive(values: Record<string, number>, what: string): void {
+  for (const [name, value] of Object.entries(values)) {
+    if (!(value > 0)) {
+      throw new Error(`${what}: ${name} must be positive, got ${value}`)
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ shell */
+
+export interface BulkheadDoor {
+  width: number
+  height: number
+  /** Door-centre height above the panel's bottom edge, meters. */
+  centerY: number
+}
+
+export interface BulkheadParams {
+  width: number
+  height: number
+  thickness: number
+  /** Optional doorway cut through the panel; omitted = solid wall panel. */
+  door?: BulkheadDoor
+}
+
+/**
+ * A wall panel in the local XY plane (normal = ±Z), standing on y = 0. With a
+ * doorway, the panel is emitted as the pieces that SURROUND the opening —
+ * two piers, a sill below and a lintel above — so the hole is exactly
+ * `door.width × door.height` and the solid area is exactly
+ * `width·height − door.width·door.height`. That is the geometry the M3-T2
+ * watertight check measures against.
+ */
+export function bulkheadParts(params: BulkheadParams): KitPart[] {
+  const { width, height, thickness, door } = params
+  requirePositive({ width, height, thickness }, 'bulkhead')
+  if (door === undefined) {
+    return [box('bulkhead', [width, height, thickness], [0, n0(height / 2), 0])]
+  }
+
+  const { width: doorWidth, height: doorHeight, centerY } = door
+  requirePositive({ 'door.width': doorWidth, 'door.height': doorHeight }, 'bulkhead')
+  const bottom = n0(centerY - doorHeight / 2)
+  const top = n0(centerY + doorHeight / 2)
+  if (bottom < -EPS || top > height + EPS) {
+    throw new Error(
+      `bulkhead: doorway ${doorWidth} × ${doorHeight} m at centre y ${centerY} ` +
+        `does not fit a ${height} m panel`,
+    )
+  }
+
+  const pier = n0((width - doorWidth) / 2)
+  if (pier <= EPS) {
+    throw new Error(
+      `bulkhead: doorway ${doorWidth} m wide leaves no panel of a ${width} m wall`,
+    )
+  }
+
+  const parts: KitPart[] = [
+    box(
+      'bulkhead',
+      [pier, height, thickness],
+      [n0(-(doorWidth / 2 + pier / 2)), n0(height / 2), 0],
+    ),
+    box(
+      'bulkhead',
+      [pier, height, thickness],
+      [n0(doorWidth / 2 + pier / 2), n0(height / 2), 0],
+    ),
+  ]
+  if (bottom > EPS) {
+    parts.push(box('bulkhead', [doorWidth, bottom, thickness], [0, n0(bottom / 2), 0]))
+  }
+  const lintel = n0(height - top)
+  if (lintel > EPS) {
+    parts.push(
+      box('bulkhead', [doorWidth, lintel, thickness], [0, n0((top + height) / 2), 0]),
+    )
+  }
+  return parts
+}
+
+export interface DeckPlateCableRuns {
+  count: number
+  /** Duct width across the plate, meters. */
+  width: number
+  /** Duct height above the walking surface, meters. */
+  height: number
+  /** Centre-to-centre spacing of the ducts along Z, meters. */
+  spacing: number
+}
+
+export interface DeckPlateParams {
+  width: number
+  depth: number
+  /** Plate thickness below the walking surface, meters. */
+  thickness: number
+  /** Raised cable-run ducts on the plate (§4: "deck plate with cable runs"). */
+  cableRuns?: DeckPlateCableRuns
+}
+
+/**
+ * A deck plate whose WALKING SURFACE is local y = 0 (the plate is the
+ * structure beneath it, like the 0.2 m deck-plate in the deck pitch). Cable
+ * runs sit on top of the plate as low ducts across the full width.
+ */
+export function deckPlateParts(params: DeckPlateParams): KitPart[] {
+  const { width, depth, thickness, cableRuns } = params
+  requirePositive({ width, depth, thickness }, 'deck plate')
+
+  const parts: KitPart[] = [
+    box('deckplate', [width, thickness, depth], [0, n0(-thickness / 2), 0]),
+  ]
+
+  if (cableRuns !== undefined) {
+    const { count, width: runWidth, height: runHeight, spacing } = cableRuns
+    requirePositive(
+      {
+        'cableRuns.width': runWidth,
+        'cableRuns.height': runHeight,
+        'cableRuns.spacing': spacing,
+      },
+      'deck plate',
+    )
+    if (!Number.isInteger(count) || count < 0) {
+      throw new Error(
+        `deck plate: cable-run count must be a non-negative integer, got ${count}`,
+      )
+    }
+    for (let i = 0; i < count; i++) {
+      const z = n0((i - (count - 1) / 2) * spacing)
+      parts.push(
+        box('conduit', [width, runHeight, runWidth], [0, n0(runHeight / 2), z]),
+      )
+    }
+  }
+
+  return parts
+}
+
+/* ---------------------------------------------------------------- utility */
+
+export interface ConduitRunParams {
+  length: number
+  radius: number
+  /** Direction the pipe runs in. */
+  axis: PartAxis
+  /** Pipe clamps along the run, evenly spaced between the ends. */
+  brackets?: number
+  /** Strap thickness of each clamp (perpendicular to the run), meters. */
+  clampThickness?: number
+}
+
+/** Size + placer for a pipe clamp around a run of the given axis. */
+function clampForAxis(
+  axis: PartAxis,
+  radius: number,
+  thickness: number,
+): { size: Vec3; at: (t: number) => Vec3 } {
+  const across = n0(2 * radius + thickness)
+  const dims: Record<PartAxis, Vec3> = {
+    x: [thickness, across, across],
+    y: [across, thickness, across],
+    z: [across, across, thickness],
+  }
+  const at = (t: number): Vec3 => {
+    if (axis === 'x') return [n0(t), 0, 0]
+    if (axis === 'y') return [0, n0(t), 0]
+    return [0, 0, n0(t)]
+  }
+  return { size: dims[axis], at }
+}
+
+/**
+ * An exposed pipe/conduit run (cylinder along `axis`) with optional clamps.
+ * Authored about its centre — the caller routes it along a bulkhead or
+ * ceiling.
+ */
+export function conduitRunParts(params: ConduitRunParams): KitPart[] {
+  const { length, radius, axis, brackets = 0, clampThickness = 0.03 } = params
+  requirePositive({ length, radius, clampThickness }, 'conduit run')
+  if (!Number.isInteger(brackets) || brackets < 0) {
+    throw new Error(
+      `conduit run: bracket count must be a non-negative integer, got ${brackets}`,
+    )
+  }
+
+  const parts: KitPart[] = [cyl('conduit', radius, length, axis, [0, 0, 0])]
+  const clamp = clampForAxis(axis, radius, clampThickness)
+  for (let i = 0; i < brackets; i++) {
+    const t = n0(-length / 2 + (length * (i + 1)) / (brackets + 1))
+    parts.push(box('bulkhead', clamp.size, clamp.at(t)))
+  }
+  return parts
+}
+
+export interface PanelLightParams {
+  width: number
+  depth: number
+  /** Housing height behind the lens, meters. */
+  housingThickness: number
+  /** Lens inset as a fraction of each half-extent, in [0, 0.5). */
+  lensInset: number
+}
+
+/**
+ * A recessed ceiling panel light: a bulkhead housing with an emissive
+ * `panel-light` lens proud of the housing's local −Y face. Origin is the
+ * housing centre; the M4 practical-light rig places the matching LightSocket.
+ */
+export function panelLightParts(params: PanelLightParams): KitPart[] {
+  const { width, depth, housingThickness, lensInset } = params
+  requirePositive({ width, depth, housingThickness }, 'panel light')
+  if (!(lensInset >= 0 && lensInset < 0.5)) {
+    throw new Error(`panel light: lensInset must be in [0, 0.5), got ${lensInset}`)
+  }
+  const inset = 1 - 2 * lensInset
+  return [
+    box('bulkhead', [width, housingThickness, depth], [0, 0, 0]),
+    box(
+      'panel-light',
+      [n0(width * inset), n0(housingThickness * 0.6), n0(depth * inset)],
+      [0, n0(-housingThickness * 0.5), 0],
+    ),
+  ]
+}
+
+/* ------------------------------------------------------------- navigation */
+
+export interface HatchParams {
+  /** Opening the hatch seals, meters (standard: 0.9 × 2.0). */
+  door: { width: number; height: number }
+  leafThickness: number
+  /** Frame border width beyond the opening, meters. */
+  frameWidth: number
+  /** Gap between the leaf edge and the opening edge, meters. */
+  clearance: number
+}
+
+/** Height of the knee-level hazard stripe on a hatch leaf, meters. */
+const HATCH_STRIPE_HEIGHT = 0.12
+
+/**
+ * A hatch that seals a DoorSocket, SOCKET-CENTRED: the local origin is the
+ * door centre in the opening's plane (local Z is the wall normal), so the
+ * assembler seats it directly on a socket with no re-derivation. Emits the
+ * leaf, the four-member frame around the opening, and the knee-level hazard
+ * stripe (§4 worn hazard striping).
+ */
+export function hatchParts(params: HatchParams): KitPart[] {
+  const { door, leafThickness, frameWidth, clearance } = params
+  const { width: doorWidth, height: doorHeight } = door
+  requirePositive(
+    {
+      'door.width': doorWidth,
+      'door.height': doorHeight,
+      leafThickness,
+      frameWidth,
+    },
+    'hatch',
+  )
+  if (!(clearance >= 0)) {
+    throw new Error(`hatch: clearance must be non-negative, got ${clearance}`)
+  }
+  const leafWidth = n0(doorWidth - 2 * clearance)
+  const leafHeight = n0(doorHeight - 2 * clearance)
+  if (!(leafWidth > 0) || !(leafHeight > 0)) {
+    throw new Error(
+      `hatch: clearance ${clearance} m leaves no leaf in a ` +
+        `${doorWidth} × ${doorHeight} m opening`,
+    )
+  }
+  const frameThickness = n0(leafThickness * 1.5)
+  const halfW = n0(doorWidth / 2 + frameWidth / 2)
+  const halfH = n0(doorHeight / 2 + frameWidth / 2)
+
+  return [
+    box('bulkhead', [leafWidth, leafHeight, leafThickness], [0, 0, 0]),
+    box(
+      'bulkhead',
+      [n0(doorWidth + 2 * frameWidth), frameWidth, frameThickness],
+      [0, halfH, 0],
+    ),
+    box(
+      'bulkhead',
+      [n0(doorWidth + 2 * frameWidth), frameWidth, frameThickness],
+      [0, n0(-halfH), 0],
+    ),
+    box('bulkhead', [frameWidth, doorHeight, frameThickness], [n0(-halfW), 0, 0]),
+    box('bulkhead', [frameWidth, doorHeight, frameThickness], [halfW, 0, 0]),
+    box(
+      'hazard',
+      [leafWidth, HATCH_STRIPE_HEIGHT, n0(leafThickness * 1.1)],
+      [0, n0(-doorHeight / 2 + clearance + HATCH_STRIPE_HEIGHT / 2 + 0.02), 0],
+    ),
+  ]
+}
+
+export interface LadderSegmentParams {
+  height: number
+  /** Centre-to-centre rail span, meters. */
+  width: number
+  railRadius: number
+  rungRadius: number
+  /** Vertical rung spacing, meters. */
+  rungSpacing: number
+  /** Height of the first rung above the floor; defaults to `rungSpacing`. */
+  firstRungY?: number
+}
+
+/**
+ * One storey of ladder: two rails (pipe stock, y = 0 → `height`) with rungs
+ * spanning between them. The rung count is derived from the spacing, so the
+ * M3-T5 climb state machine can read the rung heights straight off the parts
+ * instead of re-deriving them.
+ */
+export function ladderSegmentParts(params: LadderSegmentParams): KitPart[] {
+  const { height, width, railRadius, rungRadius, rungSpacing } = params
+  requirePositive(
+    { height, width, railRadius, rungRadius, rungSpacing },
+    'ladder segment',
+  )
+  const firstRungY = params.firstRungY ?? rungSpacing
+  requirePositive({ firstRungY }, 'ladder segment')
+  if (firstRungY + rungRadius > height) {
+    throw new Error(
+      `ladder segment: first rung at ${firstRungY} m (radius ${rungRadius} m) ` +
+        `does not fit a ${height} m segment`,
+    )
+  }
+  const railInset = n0(width / 2 - railRadius)
+  if (!(railInset > 0)) {
+    throw new Error(
+      `ladder segment: rails of radius ${railRadius} m overlap across a ${width} m span`,
+    )
+  }
+  const rungLength = n0(width - 2 * railRadius)
+
+  const parts: KitPart[] = [
+    cyl('conduit', railRadius, height, 'y', [railInset, n0(height / 2), 0]),
+    cyl('conduit', railRadius, height, 'y', [n0(-railInset), n0(height / 2), 0]),
+  ]
+
+  // Rungs are kept strictly inside the storey: the last one must not poke
+  // through the deck plate above (the M3-T5 climb pass reads these heights).
+  const count = Math.floor((height - rungRadius - firstRungY) / rungSpacing + EPS) + 1
+  if (count < 1) {
+    throw new Error(
+      `ladder segment: no rung fits a ${height} m storey at ${rungSpacing} m spacing`,
+    )
+  }
+  for (let i = 0; i < count; i++) {
+    parts.push(
+      cyl('bulkhead', rungRadius, rungLength, 'x', [
+        0,
+        n0(firstRungY + i * rungSpacing),
+        0,
+      ]),
+    )
+  }
+  return parts
+}
+
+/* ------------------------------------------------------------------ props */
+
+const LOCKER_HANDLE = { width: 0.02, height: 0.12, depth: 0.02 } as const
+
+export interface LockerParams {
+  width: number
+  height: number
+  depth: number
+  doors: number
+  doorThickness: number
+  doorGap: number
+}
+
+/** An equipment locker bank standing on the floor, with door panels + handles. */
+export function lockerParts(params: LockerParams): KitPart[] {
+  const { width, height, depth, doors, doorThickness, doorGap } = params
+  requirePositive({ width, height, depth, doorThickness }, 'locker')
+  if (!Number.isInteger(doors) || doors < 1) {
+    throw new Error(`locker: door count must be a positive integer, got ${doors}`)
+  }
+  if (!(doorGap >= 0)) {
+    throw new Error(`locker: doorGap must be non-negative, got ${doorGap}`)
+  }
+  const doorWidth = n0(width / doors)
+  const panelWidth = n0(doorWidth - doorGap)
+  const panelHeight = n0(height - 2 * doorGap)
+  if (!(panelWidth > 0) || !(panelHeight > 0)) {
+    throw new Error(
+      `locker: ${doors} door(s) with ${doorGap} m gaps do not fit a ` +
+        `${width} × ${height} m face`,
+    )
+  }
+
+  const parts: KitPart[] = [
+    box('bulkhead', [width, height, depth], [0, n0(height / 2), 0]),
+  ]
+  for (let i = 0; i < doors; i++) {
+    const x = n0(-width / 2 + doorWidth * (i + 0.5))
+    parts.push(
+      box(
+        'bulkhead',
+        [panelWidth, panelHeight, doorThickness],
+        [x, n0(height / 2), n0(depth / 2 + doorThickness / 2)],
+      ),
+    )
+    parts.push(
+      box(
+        'conduit',
+        [LOCKER_HANDLE.width, LOCKER_HANDLE.height, LOCKER_HANDLE.depth],
+        [
+          n0(x + doorWidth / 2 - 0.08),
+          n0(height / 2 - 0.12),
+          n0(depth / 2 + doorThickness + LOCKER_HANDLE.depth / 2),
+        ],
+      ),
+    )
+  }
+  return parts
+}
+
+export interface ScreenParams {
+  width: number
+  height: number
+  depth: number
+  bezel: number
+}
+
+/** A bulkhead bezel with an emissive `screen` panel proud of its +Z face. */
+export function screenParts(params: ScreenParams): KitPart[] {
+  const { width, height, depth, bezel } = params
+  requirePositive({ width, height, depth }, 'screen')
+  if (!(bezel >= 0)) {
+    throw new Error(`screen: bezel must be non-negative, got ${bezel}`)
+  }
+  const panelWidth = n0(width - 2 * bezel)
+  const panelHeight = n0(height - 2 * bezel)
+  if (!(panelWidth > 0) || !(panelHeight > 0)) {
+    throw new Error(
+      `screen: bezel ${bezel} m leaves no panel in a ${width} × ${height} m screen`,
+    )
+  }
+  return [
+    box('bulkhead', [width, height, depth], [0, 0, 0]),
+    box('screen', [panelWidth, panelHeight, n0(depth * 0.5)], [0, 0, n0(depth * 0.25)]),
+  ]
+}
+
+export interface CouchParams {
+  width: number
+  depth: number
+  /** Seat height above the floor, meters. */
+  seatHeight: number
+  /** Backrest height above the seat, meters. */
+  backHeight: number
+  /** Canvas webbing straps across the backrest. */
+  straps: number
+}
+
+/** A crash couch facing +Z: pedestal, seat pan, backrest and webbing straps. */
+export function couchParts(params: CouchParams): KitPart[] {
+  const { width, depth, seatHeight, backHeight, straps } = params
+  requirePositive({ width, depth, seatHeight, backHeight }, 'couch')
+  if (!Number.isInteger(straps) || straps < 0) {
+    throw new Error(`couch: strap count must be a non-negative integer, got ${straps}`)
+  }
+  const seatPan = 0.12
+  const backThickness = 0.12
+  const parts: KitPart[] = [
+    box(
+      'bulkhead',
+      [n0(width * 0.5), seatHeight, n0(depth * 0.6)],
+      [0, n0(seatHeight / 2), 0],
+    ),
+    box('bulkhead', [width, seatPan, depth], [0, n0(seatHeight - seatPan / 2), 0]),
+    box(
+      'bulkhead',
+      [width, backHeight, backThickness],
+      [0, n0(seatHeight + backHeight / 2), n0(-depth / 2 + backThickness / 2)],
+    ),
+  ]
+  for (let i = 0; i < straps; i++) {
+    const y = n0(seatHeight + (backHeight * (i + 1)) / (straps + 1))
+    parts.push(
+      box(
+        'webbing',
+        [width, 0.06, n0(backThickness * 1.4)],
+        [0, y, n0(-depth / 2 + backThickness * 0.7)],
+      ),
+    )
+  }
+  return parts
+}
+
+export interface TableParams {
+  width: number
+  depth: number
+  height: number
+  topThickness: number
+  /** Pipe-post leg radius, meters. */
+  legRadius: number
+}
+
+/** A bolted-down table: a bulkhead top on conduit pipe legs. */
+export function tableParts(params: TableParams): KitPart[] {
+  const { width, depth, height, topThickness, legRadius } = params
+  requirePositive({ width, depth, height, topThickness, legRadius }, 'table')
+  const legLength = n0(height - topThickness)
+  const insetX = n0(width / 2 - legRadius * 2)
+  const insetZ = n0(depth / 2 - legRadius * 2)
+  if (!(legLength > 0) || !(insetX > 0) || !(insetZ > 0)) {
+    throw new Error(
+      `table: a ${width} × ${depth} × ${height} m top with ${legRadius} m legs ` +
+        'leaves no room for the legs',
+    )
+  }
+  const leg = (x: number, z: number): KitPart =>
+    cyl('conduit', legRadius, legLength, 'y', [n0(x), n0(legLength / 2), n0(z)])
+  return [
+    box(
+      'bulkhead',
+      [width, topThickness, depth],
+      [0, n0(height - topThickness / 2), 0],
+    ),
+    leg(insetX, insetZ),
+    leg(-insetX, insetZ),
+    leg(insetX, -insetZ),
+    leg(-insetX, -insetZ),
+  ]
+}
+
+export interface CoffeeStationParams {
+  width: number
+  height: number
+  depth: number
+  accentThickness: number
+  carafeRadius: number
+  carafeHeight: number
+}
+
+/**
+ * The galley's coffee station — the §4 landmark with the ONE reserved warm
+ * accent. Cabinet body (bulkhead) + accent backsplash (`coffee-accent`), a
+ * glass carafe (`screen`, the glass/acrylic slot) on the counter, and a task
+ * light strip (`panel-light`) over the counter.
+ */
+export function coffeeStationParts(params: CoffeeStationParams): KitPart[] {
+  const { width, height, depth, accentThickness, carafeRadius, carafeHeight } = params
+  requirePositive(
+    { width, height, depth, accentThickness, carafeRadius, carafeHeight },
+    'coffee station',
+  )
+  return [
+    box('bulkhead', [width, height, depth], [0, n0(height / 2), 0]),
+    box(
+      'coffee-accent',
+      [width, n0(height * 0.45), accentThickness],
+      [0, n0(height * 0.775), n0(-depth / 2 - accentThickness / 2)],
+    ),
+    cyl('screen', carafeRadius, carafeHeight, 'y', [
+      n0(-width * 0.25),
+      n0(height + carafeHeight / 2),
+      0,
+    ]),
+    box(
+      'panel-light',
+      [n0(width * 0.6), 0.03, 0.05],
+      [0, n0(height - 0.08), n0(depth / 2 + 0.025)],
+    ),
+  ]
+}
+
+export interface HeatShieldParams {
+  width: number
+  height: number
+  thickness: number
+  stripeHeight: number
+}
+
+/**
+ * A ceramic heat-shield plate with a worn hazard stripe — the drive-adjacent
+ * shielding the engineering module (M2-T5) leans on.
+ */
+export function heatShieldParts(params: HeatShieldParams): KitPart[] {
+  const { width, height, thickness, stripeHeight } = params
+  requirePositive({ width, height, thickness, stripeHeight }, 'heat shield')
+  if (stripeHeight + 0.04 > height) {
+    throw new Error(
+      `heat shield: a ${stripeHeight} m stripe does not fit a ${height} m plate`,
+    )
+  }
+  return [
+    box('ceramic', [width, height, thickness], [0, 0, 0]),
+    box(
+      'hazard',
+      [width, stripeHeight, n0(thickness * 1.2)],
+      [0, n0(-height / 2 + stripeHeight / 2 + 0.02), 0],
+    ),
+  ]
+}
+
+/* -------------------------------------------------------------- inspection */
+
+/** Local-frame bounds of one part (rotation-aware for boxes). */
+export function partBounds(part: KitPart): Aabb3 {
+  if (part.kind === 'box') {
+    const [sx, sy, sz] = part.size
+    // A quarter-turn yaw swaps the box's X and Z extents on odd turns.
+    const oddTurn = (part.rotation ?? 0) % 2 === 1
+    const extX = n0(oddTurn ? sz : sx)
+    const extZ = n0(oddTurn ? sx : sz)
+    const [px, py, pz] = part.position
+    return {
+      min: [n0(px - extX / 2), n0(py - sy / 2), n0(pz - extZ / 2)],
+      max: [n0(px + extX / 2), n0(py + sy / 2), n0(pz + extZ / 2)],
+    }
+  }
+  const half = n0(part.length / 2)
+  const r = part.radius
+  const ext: Vec3 =
+    part.axis === 'x' ? [half, r, r] : part.axis === 'y' ? [r, half, r] : [r, r, half]
+  const [px, py, pz] = part.position
+  return {
+    min: [n0(px - ext[0]), n0(py - ext[1]), n0(pz - ext[2])],
+    max: [n0(px + ext[0]), n0(py + ext[1]), n0(pz + ext[2])],
+  }
+}
+
+/** Local-frame bounds of a whole part list. Throws on an empty list. */
+export function partsBounds(parts: readonly KitPart[]): Aabb3 {
+  if (parts.length === 0) {
+    throw new Error('partsBounds: no parts to measure')
+  }
+  let min: [number, number, number] = [Infinity, Infinity, Infinity]
+  let max: [number, number, number] = [-Infinity, -Infinity, -Infinity]
+  for (const part of parts) {
+    const b = partBounds(part)
+    for (let axis = 0; axis < 3; axis++) {
+      if (b.min[axis] < min[axis]) min[axis] = b.min[axis]
+      if (b.max[axis] > max[axis]) max[axis] = b.max[axis]
+    }
+  }
+  return { min, max }
+}
+
+/**
+ * The §4 material slots a part list actually draws from, in the canonical
+ * MATERIAL_SLOTS order (stable, de-duplicated). This is what the M2-T7
+ * "material slots fully assigned" harness diffs against a module's slots.
+ */
+export function partMaterialSlots(parts: readonly KitPart[]): MaterialSlot[] {
+  const used = new Set<MaterialSlot>(parts.map((part) => part.materialSlot))
+  return MATERIAL_SLOTS.filter((slot) => used.has(slot))
+}
+
+/** Total number of parts (for draw-call accounting notes in tests/reports). */
+export function partCount(parts: readonly KitPart[]): number {
+  return parts.length
+}
+
+/** The part list's size [x, y, z] in meters. Handy for nominal-size checks. */
+export function partsSize(parts: readonly KitPart[]): Vec3 {
+  const b = partsBounds(parts)
+  return [n0(b.max[0] - b.min[0]), n0(b.max[1] - b.min[1]), n0(b.max[2] - b.min[2])]
+}
