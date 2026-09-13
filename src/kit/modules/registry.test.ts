@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { kitManifestProblems } from '../../types'
 import { CONTRACT_KIT } from '../../validation/contractKit'
+import { GALLEY_MODULE } from './galley'
 import { HEAD_MODULE } from './head'
 import { moduleContractProblems, moduleProblems } from './integrity'
 import {
@@ -18,10 +19,14 @@ function cloneModule(): AuthoredModule {
 }
 
 describe('authored kit registry (M2-T2)', () => {
-  it('registers the bridge and exposes it as a KitManifest', () => {
-    expect(AUTHORED_MODULES.map((module) => module.manifest.id)).toEqual(['head'])
-    expect(AUTHORED_KIT.modules).toEqual([HEAD_MODULE.manifest])
+  it('registers the bridge and the galley/bunk, and exposes them as a KitManifest', () => {
+    expect(AUTHORED_MODULES.map((module) => module.manifest.id)).toEqual([
+      'head',
+      'galley',
+    ])
+    expect(AUTHORED_KIT.modules).toEqual([HEAD_MODULE.manifest, GALLEY_MODULE.manifest])
     expect(getAuthoredModule('head')).toBe(HEAD_MODULE)
+    expect(getAuthoredModule('galley')).toBe(GALLEY_MODULE)
     expect(() => getAuthoredModule('spine')).toThrow(/no module "spine"/)
   })
 

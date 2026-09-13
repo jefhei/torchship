@@ -10,6 +10,7 @@
 export * from './placement'
 export * from './types'
 export * from './head'
+export * from './galley'
 export * from './registry'
 export * from './integrity'
 export * from './render'

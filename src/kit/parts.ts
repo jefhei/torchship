@@ -63,6 +63,15 @@ export interface BulkheadDoor {
   height: number
   /** Door-centre height above the panel's bottom edge, meters. */
   centerY: number
+  /**
+   * Door-centre offset along the panel's local X, meters; omitted = 0, i.e.
+   * the doorway is centred in the panel. A side door sits off-centre in its
+   * wall (the galley's `side-door`, ops' `side-door`, engineering's
+   * `high-hatch`), so the module authors place the opening along the wall
+   * with the same builder that cuts it — never with freehand geometry
+   * (BUILD_PLAN rule 8).
+   */
+  centerX?: number
 }
 
 export interface BulkheadParams {
@@ -77,7 +86,8 @@ export interface BulkheadParams {
  * A wall panel in the local XY plane (normal = ±Z), standing on y = 0. With a
  * doorway, the panel is emitted as the pieces that SURROUND the opening —
  * two piers, a sill below and a lintel above — so the hole is exactly
- * `door.width × door.height` and the solid area is exactly
+ * `door.width × door.height` (laterally centred on `door.centerX`) and the
+ * solid area is exactly
  * `width·height − door.width·door.height`. That is the geometry the M3-T2
  * watertight check measures against.
  */
@@ -89,7 +99,11 @@ export function bulkheadParts(params: BulkheadParams): KitPart[] {
   }
 
   const { width: doorWidth, height: doorHeight, centerY } = door
+  const centerX = door.centerX ?? 0
   requirePositive({ 'door.width': doorWidth, 'door.height': doorHeight }, 'bulkhead')
+  if (!Number.isFinite(centerX)) {
+    throw new Error(`bulkhead: door.centerX must be finite, got ${centerX}`)
+  }
   const bottom = n0(centerY - doorHeight / 2)
   const top = n0(centerY + doorHeight / 2)
   if (bottom < -EPS || top > height + EPS) {
@@ -99,32 +113,47 @@ export function bulkheadParts(params: BulkheadParams): KitPart[] {
     )
   }
 
+  // Wall material left of and right of the opening. Both must survive: a door
+  // as wide as the panel (or one pushed off the edge by its centerX) leaves
+  // nothing to hang the doorway in.
   const pier = n0((width - doorWidth) / 2)
-  if (pier <= EPS) {
+  const leftPier = n0(pier + centerX)
+  const rightPier = n0(pier - centerX)
+  if (leftPier <= EPS || rightPier <= EPS) {
     throw new Error(
-      `bulkhead: doorway ${doorWidth} m wide leaves no panel of a ${width} m wall`,
+      `bulkhead: doorway ${doorWidth} m wide at centre x ${centerX} m ` +
+        `leaves no panel of a ${width} m wall`,
     )
   }
 
+  // Pier centres: the opening's offset shifts each centre by half of it — the
+  // pier on the side the door moves TOWARD loses the full offset of width, so
+  // its centre moves by half of it (and vice versa). Both shift the same way.
   const parts: KitPart[] = [
     box(
       'bulkhead',
-      [pier, height, thickness],
-      [n0(-(doorWidth / 2 + pier / 2)), n0(height / 2), 0],
+      [leftPier, height, thickness],
+      [n0(-(doorWidth / 2 + pier / 2) + centerX / 2), n0(height / 2), 0],
     ),
     box(
       'bulkhead',
-      [pier, height, thickness],
-      [n0(doorWidth / 2 + pier / 2), n0(height / 2), 0],
+      [rightPier, height, thickness],
+      [n0(doorWidth / 2 + pier / 2 + centerX / 2), n0(height / 2), 0],
     ),
   ]
   if (bottom > EPS) {
-    parts.push(box('bulkhead', [doorWidth, bottom, thickness], [0, n0(bottom / 2), 0]))
+    parts.push(
+      box('bulkhead', [doorWidth, bottom, thickness], [n0(centerX), n0(bottom / 2), 0]),
+    )
   }
   const lintel = n0(height - top)
   if (lintel > EPS) {
     parts.push(
-      box('bulkhead', [doorWidth, lintel, thickness], [0, n0((top + height) / 2), 0]),
+      box(
+        'bulkhead',
+        [doorWidth, lintel, thickness],
+        [n0(centerX), n0((top + height) / 2), 0],
+      ),
     )
   }
   return parts

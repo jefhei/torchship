@@ -132,6 +132,83 @@ describe('kit part builders (M2-T1)', () => {
         /must be positive/,
       )
     })
+
+    it('cuts an off-centre doorway at door.centerX, keeping the wall area', () => {
+      // A side door sits 1.2 m along its wall (the galley's starboard door).
+      const parts = bulkheadParts({
+        width: 5,
+        height: 3,
+        thickness: 0.1,
+        door: { width: 0.9, height: 2, centerY: 1, centerX: 1.2 },
+      })
+      expect(parts).toHaveLength(3)
+      const leftPier = boxAt(parts, 0)
+      const rightPier = boxAt(parts, 1)
+      const lintel = boxAt(parts, 2)
+      // The opening's edges are exactly centerX ± door.width/2 …
+      expectVec(lintel.size, [0.9, 1, 0.1])
+      expectVec(lintel.position, [1.2, 2.5, 0])
+      expect(leftPier.position[0] + leftPier.size[0] / 2).toBeCloseTo(1.2 - 0.45, 9)
+      expect(rightPier.position[0] - rightPier.size[0] / 2).toBeCloseTo(1.2 + 0.45, 9)
+      // …the piers take up the slack either side (2.05 ∓ 1.2)…
+      expectVec(leftPier.size, [3.25, 3, 0.1])
+      expectVec(rightPier.size, [0.85, 3, 0.1])
+      // …and the panel still spans the whole wall, minus the doorway.
+      const bounds = partsBounds(parts)
+      expectVec(bounds.min, [-2.5, 0, -0.05])
+      expectVec(bounds.max, [2.5, 3, 0.05])
+      const solid = parts.reduce(
+        (area, part) => area + (part as BoxPart).size[0] * (part as BoxPart).size[1],
+        0,
+      )
+      expect(solid).toBeCloseTo(5 * 3 - 0.9 * 2, 9)
+    })
+
+    it('matches the centred build exactly when centerX is 0 or omitted', () => {
+      const centred = bulkheadParts({
+        width: 4.8,
+        height: 3,
+        thickness: 0.1,
+        door: { width: 0.9, height: 2, centerY: 1 },
+      })
+      const explicit = bulkheadParts({
+        width: 4.8,
+        height: 3,
+        thickness: 0.1,
+        door: { width: 0.9, height: 2, centerY: 1, centerX: 0 },
+      })
+      expect(explicit).toEqual(centred)
+    })
+
+    it('rejects an off-centre doorway pushed off the panel edge', () => {
+      // centerX 2.2 leaves the right-hand pier at 2.05 − 2.2 = −0.15 m.
+      expect(() =>
+        bulkheadParts({
+          width: 5,
+          height: 3,
+          thickness: 0.1,
+          door: { width: 0.9, height: 2, centerY: 1, centerX: 2.2 },
+        }),
+      ).toThrow(/leaves no panel/)
+      // A door exactly as wide as the remaining panel is still a rejection.
+      expect(() =>
+        bulkheadParts({
+          width: 5,
+          height: 3,
+          thickness: 0.1,
+          door: { width: 1, height: 2, centerY: 1, centerX: 2 },
+        }),
+      ).toThrow(/leaves no panel/)
+      // A non-finite offset is a caller bug, not a doorway.
+      expect(() =>
+        bulkheadParts({
+          width: 5,
+          height: 3,
+          thickness: 0.1,
+          door: { width: 0.9, height: 2, centerY: 1, centerX: Number.NaN },
+        }),
+      ).toThrow(/centerX must be finite/)
+    })
   })
 
   describe('deck plate', () => {

@@ -6,3 +6,4 @@
  */
 
 export * from './HeadModule'
+export * from './GalleyModule'

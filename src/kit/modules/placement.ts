@@ -46,15 +46,29 @@ export function rotateAxis(axis: PartAxis, turns: Rotation): PartAxis {
 }
 
 /**
+ * One POINT in primitive-local space, transformed into module-local space by
+ * a placement: rotate by `rotY`, then translate. The point twin of
+ * `placePart`, for the anchors a module derives from a point INSIDE a
+ * primitive rather than from its origin — e.g. the galley's coffee-station
+ * task-light socket, which sits on the cabinet's own front face. Same
+ * transform, same normalization, so an anchor can never disagree with the
+ * geometry it was read from.
+ */
+export function placePoint(point: Vec3, placement: PrimitivePlacement = {}): Vec3 {
+  const turns = placement.rotation ?? 0
+  const [dx, dy, dz] = placement.position ?? ZERO
+  const [rx, ry, rz] = rotY(point, turns)
+  return [n0(rx + dx), n0(ry + dy), n0(rz + dz)]
+}
+
+/**
  * One part translated by `placement.position` and yawed by `placement.rotation`
  * (the renderer's group transform, in meters). Returns a new part; the input is
  * never mutated.
  */
 export function placePart(part: KitPart, placement: PrimitivePlacement = {}): KitPart {
   const turns = placement.rotation ?? 0
-  const [dx, dy, dz] = placement.position ?? ZERO
-  const [rx, ry, rz] = rotY(part.position, turns)
-  const position: Vec3 = [n0(rx + dx), n0(ry + dy), n0(rz + dz)]
+  const position = placePoint(part.position, placement)
   if (turns === 0) return { ...part, position }
   if (part.kind === 'box') {
     return { ...part, position, rotation: addTurns(part.rotation ?? 0, turns) }
