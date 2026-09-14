@@ -7,3 +7,4 @@
 
 export * from './HeadModule'
 export * from './GalleyModule'
+export * from './OpsModule'

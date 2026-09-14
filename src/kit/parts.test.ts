@@ -18,6 +18,7 @@ import {
   partsBounds,
   partsSize,
   screenParts,
+  suitRackParts,
   tableParts,
 } from './parts'
 import type { BoxPart, CylinderPart, KitPart } from './types'
@@ -623,6 +624,96 @@ describe('kit part builders (M2-T1)', () => {
       const carafe = cylinderAt(parts, 2)
       expect(carafe.axis).toBe('y')
       expect(carafe.position[1] - carafe.length / 2).toBeCloseTo(0.95, 9)
+    })
+  })
+
+  describe('suit rack', () => {
+    const DEFAULT = {
+      width: 0.9,
+      height: 2,
+      depth: 0.08,
+      suits: 2,
+      suitWidth: 0.4,
+      suitHeight: 0.85,
+      suitDepth: 0.3,
+      suitY: 0.7,
+      helmetRadius: 0.15,
+    } as const
+
+    it('hangs one vac suit per bay: torso, helmet and visor', () => {
+      const parts = suitRackParts(DEFAULT)
+      // The board plus three parts per suit.
+      expect(parts).toHaveLength(1 + 3 * DEFAULT.suits)
+      expect(partMaterialSlots(parts)).toEqual(['bulkhead', 'screen', 'webbing'])
+
+      // The board stands on local y = 0 in the XY plane.
+      const board = boxAt(parts, 0)
+      expectVec(board.size, [DEFAULT.width, DEFAULT.height, DEFAULT.depth])
+      expectVec(board.position, [0, DEFAULT.height / 2, 0])
+      expect(board.materialSlot).toBe('bulkhead')
+
+      for (let suit = 0; suit < DEFAULT.suits; suit++) {
+        const base = 1 + suit * 3
+        const torso = boxAt(parts, base)
+        const helmet = cylinderAt(parts, base + 1)
+        const visor = cylinderAt(parts, base + 2)
+        // Torso: canvas webbing, hanging proud of the board's front face.
+        expect(torso.materialSlot).toBe('webbing')
+        expectVec(torso.size, [
+          DEFAULT.suitWidth,
+          DEFAULT.suitHeight,
+          DEFAULT.suitDepth,
+        ])
+        expect(torso.position[2] - DEFAULT.suitDepth / 2).toBeCloseTo(
+          DEFAULT.depth / 2,
+          9,
+        )
+        // The torso's base is the hook height.
+        expect(torso.position[1] - DEFAULT.suitHeight / 2).toBeCloseTo(DEFAULT.suitY, 9)
+        // Helmet: a barrel centred on the torso's top edge, reaching
+        // suitY + suitHeight + helmetRadius (inside the board).
+        expect(helmet.materialSlot).toBe('bulkhead')
+        expect(helmet.axis).toBe('y')
+        expect(helmet.radius).toBeCloseTo(DEFAULT.helmetRadius, 9)
+        expect(helmet.length).toBeCloseTo(2 * DEFAULT.helmetRadius, 9)
+        expect(helmet.position[1]).toBeCloseTo(DEFAULT.suitY + DEFAULT.suitHeight, 9)
+        expect(helmet.position[1] + helmet.length / 2).toBeLessThan(DEFAULT.height)
+        // Visor: the glass/acrylic slot, proud of the helmet's front.
+        expect(visor.materialSlot).toBe('screen')
+        expect(visor.axis).toBe('z')
+        expect(visor.position[2] - visor.length / 2).toBeCloseTo(
+          helmet.position[2] + DEFAULT.helmetRadius,
+          9,
+        )
+        // Suits hang side by side, symmetric about the board's centre.
+        const bay = DEFAULT.width / DEFAULT.suits
+        expect(torso.position[0]).toBeCloseTo(
+          -DEFAULT.width / 2 + bay * (suit + 0.5),
+          9,
+        )
+        expect(visor.position[0]).toBeCloseTo(torso.position[0], 9)
+      }
+
+      // The suits never widen the rack: the board is its widest part.
+      const bounds = partsBounds(parts)
+      expectVec([bounds.min[0], bounds.max[0]], [-DEFAULT.width / 2, DEFAULT.width / 2])
+      expect(bounds.max[2]).toBeGreaterThan(DEFAULT.depth / 2)
+    })
+
+    it('rejects a suit that does not fit its bay or a head above the board', () => {
+      expect(() => suitRackParts({ ...DEFAULT, suitWidth: 0.6 })).toThrow(
+        /does not fit a .* bay/,
+      )
+      expect(() => suitRackParts({ ...DEFAULT, suitY: 1.2 })).toThrow(
+        /pokes above the .* rack board/,
+      )
+      expect(() => suitRackParts({ ...DEFAULT, suits: 0 })).toThrow(/positive integer/)
+      expect(() => suitRackParts({ ...DEFAULT, suitY: -0.1 })).toThrow(
+        /must be non-negative/,
+      )
+      expect(() => suitRackParts({ ...DEFAULT, suits: 1, suitWidth: 1.0 })).toThrow(
+        /does not fit a .* bay/,
+      )
     })
   })
 

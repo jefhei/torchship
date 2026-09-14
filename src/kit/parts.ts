@@ -651,6 +651,117 @@ export function coffeeStationParts(params: CoffeeStationParams): KitPart[] {
   ]
 }
 
+export interface SuitRackParams {
+  /** Rack board width across the wall, meters. */
+  width: number
+  /** Rack board height (the board grows up from local y = 0), meters. */
+  height: number
+  /** Rack board thickness, proud of the wall, meters. */
+  depth: number
+  /** Vac suits hanging on the rack, one bay each. */
+  suits: number
+  /** Torso block width, meters. */
+  suitWidth: number
+  /** Torso block height, meters. */
+  suitHeight: number
+  /** Torso block depth — how far the suit hangs proud of the board, meters. */
+  suitDepth: number
+  /** Torso base height above the floor (the hook height), meters. */
+  suitY: number
+  /** Helmet radius; the suit's head is a barrel of this radius, meters. */
+  helmetRadius: number
+}
+
+/** Visor thickness (along the suit's front normal), meters. */
+const SUIT_VISOR_THICKNESS = 0.05
+/** Visor radius as a fraction of the helmet it sits on. */
+const SUIT_VISOR_RADIUS_RATIO = 0.62
+
+/**
+ * A vac-suit rack: a rack board on a wall with `suits` vac suits hanging in
+ * equal bays along it. Each suit is a torso block (`webbing` — the §4 canvas
+ * and straps), a barrel helmet (`bulkhead`) and a proud visor disc (`screen`,
+ * the glass/acrylic slot), so the §4 "two vac suits on racks" landmark of the
+ * airlock reads as suits rather than as another locker bank.
+ *
+ * Local frame: the board stands on local y = 0 in the XY plane (thickness
+ * along local Z), so the caller places it against a wall with the suits
+ * facing the room along +Z.
+ */
+export function suitRackParts(params: SuitRackParams): KitPart[] {
+  const {
+    width,
+    height,
+    depth,
+    suits,
+    suitWidth,
+    suitHeight,
+    suitDepth,
+    suitY,
+    helmetRadius,
+  } = params
+  requirePositive(
+    { width, height, depth, suitWidth, suitHeight, suitDepth, helmetRadius },
+    'suit rack',
+  )
+  if (!Number.isInteger(suits) || suits < 1) {
+    throw new Error(`suit rack: suit count must be a positive integer, got ${suits}`)
+  }
+  if (!(suitY >= 0)) {
+    throw new Error(`suit rack: suitY must be non-negative, got ${suitY}`)
+  }
+  const bay = n0(width / suits)
+  if (suitWidth > bay + EPS) {
+    throw new Error(
+      `suit rack: a ${suitWidth} m suit does not fit a ${bay} m bay of a ` +
+        `${width} m rack for ${suits} suit(s)`,
+    )
+  }
+  // The head is a barrel centred on the torso's top edge, so it reaches
+  // suitY + suitHeight + helmetRadius — inside the board, or the rack reads as
+  // decapitated.
+  const headTop = n0(suitY + suitHeight + helmetRadius)
+  if (headTop > height + EPS) {
+    throw new Error(
+      `suit rack: a suited head reaching ${headTop} m pokes above the ` +
+        `${height} m rack board`,
+    )
+  }
+  const torsoZ = n0(depth / 2 + suitDepth / 2)
+  const visorZ = n0(depth / 2 + suitDepth / 2 + helmetRadius + SUIT_VISOR_THICKNESS / 2)
+
+  const parts: KitPart[] = [
+    box('bulkhead', [width, height, depth], [0, n0(height / 2), 0]),
+  ]
+  for (let i = 0; i < suits; i++) {
+    const x = n0(-width / 2 + bay * (i + 0.5))
+    parts.push(
+      box(
+        'webbing',
+        [suitWidth, suitHeight, suitDepth],
+        [x, n0(suitY + suitHeight / 2), torsoZ],
+      ),
+    )
+    parts.push(
+      cyl('bulkhead', helmetRadius, n0(2 * helmetRadius), 'y', [
+        x,
+        n0(suitY + suitHeight),
+        torsoZ,
+      ]),
+    )
+    parts.push(
+      cyl(
+        'screen',
+        n0(helmetRadius * SUIT_VISOR_RADIUS_RATIO),
+        SUIT_VISOR_THICKNESS,
+        'z',
+        [x, n0(suitY + suitHeight), visorZ],
+      ),
+    )
+  }
+  return parts
+}
+
 export interface HeatShieldParams {
   width: number
   height: number

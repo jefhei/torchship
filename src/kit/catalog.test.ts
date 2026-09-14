@@ -42,6 +42,7 @@ describe('kit primitive catalog (M2-T1)', () => {
       'couch',
       'table',
       'coffee-station',
+      'suit-rack',
       'heat-shield',
     ])
   })
@@ -126,7 +127,7 @@ describe('kit primitive catalog (M2-T1)', () => {
       'hatch',
       'ladder-segment',
     ])
-    expect(primitivesInCategory('prop')).toHaveLength(5)
+    expect(primitivesInCategory('prop')).toHaveLength(6)
     expect(primitivesInCategory('thermal').map((p) => p.id)).toEqual(['heat-shield'])
   })
 

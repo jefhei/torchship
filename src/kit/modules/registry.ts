@@ -16,10 +16,15 @@ import type { KitManifest } from '../../types'
 import { GALLEY_MODULE } from './galley'
 import { HEAD_MODULE } from './head'
 import { moduleContractProblems, moduleProblems } from './integrity'
+import { OPS_MODULE } from './ops'
 import type { AuthoredModule } from './types'
 
 /** Every authored module, in build order (one entry per M2-T2..T6 task). */
-export const AUTHORED_MODULES: readonly AuthoredModule[] = [HEAD_MODULE, GALLEY_MODULE]
+export const AUTHORED_MODULES: readonly AuthoredModule[] = [
+  HEAD_MODULE,
+  GALLEY_MODULE,
+  OPS_MODULE,
+]
 
 /** The authored kit as the assembler reads it (M1-T2 manifest). */
 export const AUTHORED_KIT: KitManifest = {

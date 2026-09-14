@@ -31,6 +31,7 @@ import {
   lockerParts,
   panelLightParts,
   screenParts,
+  suitRackParts,
   tableParts,
 } from '../parts'
 import type {
@@ -45,6 +46,7 @@ import type {
   LockerParams,
   PanelLightParams,
   ScreenParams,
+  SuitRackParams,
   TableParams,
 } from '../parts'
 import type { PrimitivePlacement } from '../types'
@@ -211,6 +213,19 @@ export function HeatShield({
   return (
     <group {...placementProps({ position, rotation })}>
       <KitParts parts={heatShieldParts(params)} />
+    </group>
+  )
+}
+
+/** Vac-suit rack: a rack board with vac suits hanging on it, faces local +Z. */
+export function SuitRack({
+  position,
+  rotation,
+  ...params
+}: SuitRackParams & PrimitivePlacement) {
+  return (
+    <group {...placementProps({ position, rotation })}>
+      <KitParts parts={suitRackParts(params)} />
     </group>
   )
 }

@@ -4,6 +4,7 @@ import { CONTRACT_KIT } from '../../validation/contractKit'
 import { GALLEY_MODULE } from './galley'
 import { HEAD_MODULE } from './head'
 import { moduleContractProblems, moduleProblems } from './integrity'
+import { OPS_MODULE } from './ops'
 import {
   AUTHORED_KIT,
   AUTHORED_MODULES,
@@ -19,14 +20,20 @@ function cloneModule(): AuthoredModule {
 }
 
 describe('authored kit registry (M2-T2)', () => {
-  it('registers the bridge and the galley/bunk, and exposes them as a KitManifest', () => {
+  it('registers the bridge, the galley/bunk and the ops deck as a KitManifest', () => {
     expect(AUTHORED_MODULES.map((module) => module.manifest.id)).toEqual([
       'head',
       'galley',
+      'ops',
     ])
-    expect(AUTHORED_KIT.modules).toEqual([HEAD_MODULE.manifest, GALLEY_MODULE.manifest])
+    expect(AUTHORED_KIT.modules).toEqual([
+      HEAD_MODULE.manifest,
+      GALLEY_MODULE.manifest,
+      OPS_MODULE.manifest,
+    ])
     expect(getAuthoredModule('head')).toBe(HEAD_MODULE)
     expect(getAuthoredModule('galley')).toBe(GALLEY_MODULE)
+    expect(getAuthoredModule('ops')).toBe(OPS_MODULE)
     expect(() => getAuthoredModule('spine')).toThrow(/no module "spine"/)
   })
 

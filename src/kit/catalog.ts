@@ -37,6 +37,7 @@ import {
   lockerParts,
   panelLightParts,
   screenParts,
+  suitRackParts,
   tableParts,
 } from './parts'
 import type {
@@ -51,6 +52,7 @@ import type {
   LockerParams,
   PanelLightParams,
   ScreenParams,
+  SuitRackParams,
   TableParams,
 } from './parts'
 import type { KitPrimitive, KitPart, PrimitiveCategory, PrimitiveId } from './types'
@@ -153,6 +155,18 @@ const HEAT_SHIELD_DEFAULT: HeatShieldParams = {
   stripeHeight: 0.1,
 }
 
+const SUIT_RACK_DEFAULT: SuitRackParams = {
+  width: 0.9,
+  height: 2.0,
+  depth: 0.08,
+  suits: 2,
+  suitWidth: 0.4,
+  suitHeight: 0.85,
+  suitDepth: 0.3,
+  suitY: 0.7,
+  helmetRadius: 0.15,
+}
+
 /* --------------------------------------------------------------- catalog */
 
 /**
@@ -251,6 +265,14 @@ export const KIT_PRIMITIVES: readonly KitPrimitive[] = [
     fillsSocket: false,
   },
   {
+    id: 'suit-rack',
+    label: 'Vac suit rack (rack board, two vac suits on hooks, visor glass)',
+    category: 'prop',
+    bounds: { min: [-0.45, 0, -0.04], max: [0.45, 2, 0.39] },
+    materialSlots: ['bulkhead', 'screen', 'webbing'],
+    fillsSocket: false,
+  },
+  {
     id: 'heat-shield',
     label: 'Ceramic heat shield with worn hazard stripe (drive-adjacent)',
     category: 'thermal',
@@ -337,6 +359,8 @@ export function defaultPrimitiveParts(id: PrimitiveId): KitPart[] {
       return tableParts(TABLE_DEFAULT)
     case 'coffee-station':
       return coffeeStationParts(COFFEE_STATION_DEFAULT)
+    case 'suit-rack':
+      return suitRackParts(SUIT_RACK_DEFAULT)
     case 'heat-shield':
       return heatShieldParts(HEAT_SHIELD_DEFAULT)
     default: {

@@ -70,6 +70,7 @@ export type PrimitiveId =
   | 'couch'
   | 'table'
   | 'coffee-station'
+  | 'suit-rack'
   | 'heat-shield'
 
 /**
