@@ -666,7 +666,8 @@ describe('authored engineering module (M2-T5)', () => {
   it('derives the collision hint from the solid geometry (hatches and deck not hull)', () => {
     const solidParts = moduleSolidParts(ENGINEERING_MODULE)
     const boxes = moduleCollisionBoxes(ENGINEERING_MODULE)
-    expect(boxes.length).toBeGreaterThan(40)
+    // One box per solid part — 51 of them on the authored room.
+    expect(boxes).toHaveLength(51)
     expect(boxes).toHaveLength(solidParts.length)
     boxes.forEach((box, index) => {
       expectBoundsClose(box, partBounds(solidParts[index]))

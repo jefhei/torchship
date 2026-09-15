@@ -444,7 +444,8 @@ describe('authored storage module (M2-T5)', () => {
   it('derives the collision hint from the solid geometry (hatches excluded)', () => {
     const solidParts = moduleSolidParts(STORAGE_MODULE)
     const boxes = moduleCollisionBoxes(STORAGE_MODULE)
-    expect(boxes.length).toBeGreaterThan(80)
+    // One box per solid part — 102 of them on the loaded hold.
+    expect(boxes).toHaveLength(102)
     expect(boxes).toHaveLength(solidParts.length)
     boxes.forEach((box, index) => {
       expectBoundsClose(box, partBounds(solidParts[index]))
