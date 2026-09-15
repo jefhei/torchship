@@ -791,6 +791,346 @@ export function heatShieldParts(params: HeatShieldParams): KitPart[] {
   ]
 }
 
+/* -------------------------------------------------------------- reactor */
+
+export interface GlowWindowParams {
+  /** Outer frame width across the wall, meters. */
+  width: number
+  /** Outer frame height, meters. */
+  height: number
+  /** Frame depth along the wall normal (local Z), meters. */
+  depth: number
+  /** Frame border width around the opening, meters. */
+  frameWidth: number
+  /** Glow-lens inset as a fraction of each opening half-extent, in [0, 0.5). */
+  glowInset: number
+  /** Grating bars across the opening (0 = an unshielded window). */
+  barCount: number
+  /** Grating bar width across the opening, meters. */
+  barWidth: number
+  /** Grating bar thickness proud of the frame's +Z face, meters. */
+  barThickness: number
+}
+
+/** Glow-lens thickness as a fraction of the frame depth. */
+const GLOW_LENS_DEPTH_RATIO = 0.4
+
+/**
+ * The reactor room's shielded drive-glow window (M2-T5): a bulkhead frame
+ * around the opening, the drive's glow recessed behind it in the
+ * `panel-light` slot — the one warm light of the reactor room, and the
+ * M4 practical-light rig's `reactor` socket — and grating bars proud of the
+ * frame's local +Z face, so the glow reads as light coming through a shield
+ * rather than as a screen.
+ *
+ * Authored about its centre in the local XY plane (thickness along Z), like
+ * `screenParts` and `heatShieldParts`: place it flush on a bulkhead and yaw it
+ * so the grating faces the room. The frame is FOUR pieces so the jambs fill
+ * the panel exactly; the recessed lens never protrudes past the frame.
+ */
+export function glowWindowParts(params: GlowWindowParams): KitPart[] {
+  const {
+    width,
+    height,
+    depth,
+    frameWidth,
+    glowInset,
+    barCount,
+    barWidth,
+    barThickness,
+  } = params
+  requirePositive(
+    { width, height, depth, frameWidth, barWidth, barThickness },
+    'glow window',
+  )
+  if (!(glowInset >= 0 && glowInset < 0.5)) {
+    throw new Error(`glow window: glowInset must be in [0, 0.5), got ${glowInset}`)
+  }
+  if (!Number.isInteger(barCount) || barCount < 0) {
+    throw new Error(
+      `glow window: barCount must be a non-negative integer, got ${barCount}`,
+    )
+  }
+  const halfDepth = n0(depth / 2)
+  const openWidth = n0(width - 2 * frameWidth)
+  const openHeight = n0(height - 2 * frameWidth)
+  if (!(openWidth > 0) || !(openHeight > 0)) {
+    throw new Error(
+      `glow window: a ${frameWidth} m frame leaves no opening in a ` +
+        `${width} × ${height} m window`,
+    )
+  }
+  if (barCount > 0 && barWidth > n0(openWidth / barCount) + EPS) {
+    throw new Error(
+      `glow window: ${barCount} bar(s) ${barWidth} m wide do not fit a ` +
+        `${openWidth} m opening`,
+    )
+  }
+
+  const inset = 1 - 2 * glowInset
+  const parts: KitPart[] = [
+    // Frame: the rails span the full width, the jambs fill the corners.
+    box(
+      'bulkhead',
+      [width, frameWidth, depth],
+      [0, n0(height / 2 - frameWidth / 2), 0],
+    ),
+    box(
+      'bulkhead',
+      [width, frameWidth, depth],
+      [0, n0(-height / 2 + frameWidth / 2), 0],
+    ),
+    box(
+      'bulkhead',
+      [frameWidth, openHeight, depth],
+      [n0(-width / 2 + frameWidth / 2), 0, 0],
+    ),
+    box(
+      'bulkhead',
+      [frameWidth, openHeight, depth],
+      [n0(width / 2 - frameWidth / 2), 0, 0],
+    ),
+    // The drive's glow, RECESSED inside the opening (never proud of the frame).
+    box(
+      'panel-light',
+      [
+        n0(openWidth * inset),
+        n0(openHeight * inset),
+        n0(depth * GLOW_LENS_DEPTH_RATIO),
+      ],
+      [0, 0, 0],
+    ),
+  ]
+
+  for (let i = 0; i < barCount; i++) {
+    const x = n0(-openWidth / 2 + (openWidth * (i + 0.5)) / barCount)
+    parts.push(
+      box(
+        'conduit',
+        [barWidth, openHeight, barThickness],
+        [x, 0, n0(halfDepth + barThickness / 2)],
+      ),
+    )
+  }
+  return parts
+}
+
+export interface RadiationSignParams {
+  /** Placard width across the wall, meters. */
+  width: number
+  /** Placard height, meters. */
+  height: number
+  /** Placard plate thickness (along local Z), meters. */
+  thickness: number
+  /** Radius of the mark's centre hub, meters. */
+  hubRadius: number
+  /** Radius of each of the three blades, meters. */
+  bladeRadius: number
+  /** Centre-to-centre distance from the hub to each blade, meters. */
+  bladeDistance: number
+  /** How far the mark sits proud of the plate's +Z face, meters. */
+  markThickness: number
+}
+
+/**
+ * Blade centre angles of the three-fold radiation mark, degrees: up (90°) and
+ * the two lower blades (210° / 330°) — the trefoil's own geometry.
+ */
+const TREFOIL_BLADE_ANGLES_DEG = [90, 210, 330] as const
+
+/**
+ * The reactor room's radiation warning placard (M2-T5): a hazard-slot plate
+ * with the three-fold radiation mark proud of its +Z face.
+ *
+ * The kit's vocabulary is boxes and cylinders, so the mark is built from DISC
+ * blades (z-axis cylinders) at the symbol's own 120° blade positions — the
+ * three-fold warning mark at ship scale, and the reason it is a primitive
+ * rather than something a module author hand-places (BUILD_PLAN rule 8).
+ * The well-known symbol's wedges are approximated by discs: same three-fold
+ * read, no non-axis-aligned geometry to render or collide.
+ *
+ * Authored about its centre in the local XY plane; the mark must fit inside
+ * the plate (so the plate always sets the bounds), and `markReach` — the
+ * farthest point of the mark from the plate's centre — is the fit test.
+ */
+export function radiationSignParts(params: RadiationSignParams): KitPart[] {
+  const {
+    width,
+    height,
+    thickness,
+    hubRadius,
+    bladeRadius,
+    bladeDistance,
+    markThickness,
+  } = params
+  requirePositive(
+    { width, height, thickness, hubRadius, bladeRadius, bladeDistance, markThickness },
+    'radiation sign',
+  )
+  const markReach = Math.max(hubRadius, bladeDistance + bladeRadius)
+  if (!(markReach < Math.min(width, height) / 2)) {
+    throw new Error(
+      `radiation sign: a mark reaching ${markReach} m does not fit inside a ` +
+        `${width} × ${height} m placard`,
+    )
+  }
+
+  const markZ = n0(thickness / 2 + markThickness / 2)
+  const parts: KitPart[] = [
+    // The placard: the §4 hazard slot (the one warning-coloured surface).
+    box('hazard', [width, height, thickness], [0, 0, 0]),
+    // The hub of the mark.
+    cyl('bulkhead', hubRadius, markThickness, 'z', [0, 0, markZ]),
+  ]
+  for (const angleDeg of TREFOIL_BLADE_ANGLES_DEG) {
+    const radians = (angleDeg * Math.PI) / 180
+    parts.push(
+      cyl('bulkhead', bladeRadius, markThickness, 'z', [
+        n0(bladeDistance * Math.cos(radians)),
+        n0(bladeDistance * Math.sin(radians)),
+        markZ,
+      ]),
+    )
+  }
+  return parts
+}
+
+/* ---------------------------------------------------------------- cargo */
+
+export interface CargoCrateParams {
+  /** Crate width across the room, meters. */
+  width: number
+  /** Crate body height (above its skids), meters. */
+  height: number
+  /** Crate depth along the row, meters. */
+  depth: number
+  /** Skid height above the deck, meters. */
+  skidHeight: number
+  /** Skid runner thickness (across the crate's depth), meters. */
+  skidThickness: number
+  /** Webbing tie-down straps wrapping the crate, one per bay. */
+  straps: number
+  /** Strap width across the crate, meters. */
+  strapWidth: number
+  /** Strap thickness proud of the crate's faces, meters. */
+  strapThickness: number
+}
+
+/** Height of the cargo crate's hazard placard, meters. */
+const CRATE_LABEL_HEIGHT = 0.12
+/** Clearance between the placard and the crate's lid, meters. */
+const CRATE_LABEL_MARGIN = 0.06
+/** Placard thickness as a fraction of the strap thickness (never sets bounds). */
+const CRATE_LABEL_THICKNESS_RATIO = 0.4
+/** Widest placard a crate carries, meters. */
+const CRATE_LABEL_MAX_WIDTH = 0.4
+
+/**
+ * A cargo crate (M2-T5): a bulkhead container riding on two conduit skids
+ * (the pallet), webbing tie-down straps wrapping it over the lid and down both
+ * ends (§4 "canvas webbing and straps" doing the work the long-haul hold needs
+ * — cargo that reads as SECURED), and a hazard placard small enough never to
+ * beat the straps for the bounding box.
+ *
+ * Local frame: the skids stand on local y = 0, so the crate rests on the deck
+ * like every other floor-standing primitive; the placard is on the local +Z
+ * face, which is the side a crate shows to the walkway.
+ */
+export function cargoCrateParts(params: CargoCrateParams): KitPart[] {
+  const {
+    width,
+    height,
+    depth,
+    skidHeight,
+    skidThickness,
+    straps,
+    strapWidth,
+    strapThickness,
+  } = params
+  requirePositive(
+    { width, height, depth, skidHeight, skidThickness, strapWidth, strapThickness },
+    'cargo crate',
+  )
+  if (!Number.isInteger(straps) || straps < 1) {
+    throw new Error(
+      `cargo crate: strap count must be a positive integer, got ${straps}`,
+    )
+  }
+  if (!(skidThickness <= depth / 2 + EPS)) {
+    throw new Error(
+      `cargo crate: ${skidThickness} m skids do not fit under a ${depth} m crate`,
+    )
+  }
+  const bay = n0(width / straps)
+  if (!(strapWidth <= bay + EPS)) {
+    throw new Error(
+      `cargo crate: a ${strapWidth} m strap is wider than its ${bay} m bay of a ` +
+        `${width} m crate`,
+    )
+  }
+  if (!(height > CRATE_LABEL_HEIGHT + 2 * CRATE_LABEL_MARGIN)) {
+    throw new Error(
+      `cargo crate: a ${CRATE_LABEL_HEIGHT} m placard does not fit a ${height} m crate`,
+    )
+  }
+
+  const skidY = n0(skidHeight / 2)
+  const bodyY = n0(skidHeight + height / 2)
+  const lidY = n0(skidHeight + height)
+  const parts: KitPart[] = [
+    box(
+      'conduit',
+      [width, skidHeight, skidThickness],
+      [0, skidY, n0(depth / 2 - skidThickness / 2)],
+    ),
+    box(
+      'conduit',
+      [width, skidHeight, skidThickness],
+      [0, skidY, n0(-depth / 2 + skidThickness / 2)],
+    ),
+    box('bulkhead', [width, height, depth], [0, bodyY, 0]),
+  ]
+
+  for (let i = 0; i < straps; i++) {
+    const x = n0(-width / 2 + bay * (i + 0.5))
+    parts.push(
+      box(
+        'webbing',
+        [strapWidth, strapThickness, n0(depth + 2 * strapThickness)],
+        [x, n0(lidY + strapThickness / 2), 0],
+      ),
+      box(
+        'webbing',
+        [strapWidth, height, strapThickness],
+        [x, bodyY, n0(depth / 2 + strapThickness / 2)],
+      ),
+      box(
+        'webbing',
+        [strapWidth, height, strapThickness],
+        [x, bodyY, n0(-depth / 2 - strapThickness / 2)],
+      ),
+    )
+  }
+
+  const labelThickness = n0(strapThickness * CRATE_LABEL_THICKNESS_RATIO)
+  parts.push(
+    box(
+      'hazard',
+      [
+        Math.min(CRATE_LABEL_MAX_WIDTH, n0(width * 0.5)),
+        CRATE_LABEL_HEIGHT,
+        labelThickness,
+      ],
+      [
+        0,
+        n0(lidY - CRATE_LABEL_MARGIN - CRATE_LABEL_HEIGHT / 2),
+        n0(depth / 2 + labelThickness / 2),
+      ],
+    ),
+  )
+  return parts
+}
+
 /* -------------------------------------------------------------- inspection */
 
 /** Local-frame bounds of one part (rotation-aware for boxes). */

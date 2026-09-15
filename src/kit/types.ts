@@ -57,7 +57,8 @@ export type KitPart = BoxPart | CylinderPart
  */
 export type PrimitiveCategory = 'shell' | 'utility' | 'navigation' | 'prop' | 'thermal'
 
-/** Every kit primitive the catalog knows (BUILD_PLAN M2-T1 list + heat shield). */
+/** Every kit primitive the catalog knows (BUILD_PLAN M2-T1 list + heat shield,
+ * glow window + radiation sign (M2-T5 reactor room), cargo crate (M2-T5 hold)). */
 export type PrimitiveId =
   | 'bulkhead'
   | 'deck-plate'
@@ -72,6 +73,9 @@ export type PrimitiveId =
   | 'coffee-station'
   | 'suit-rack'
   | 'heat-shield'
+  | 'glow-window'
+  | 'radiation-sign'
+  | 'cargo-crate'
 
 /**
  * A catalog entry: what the primitive is, the local-frame box its default

@@ -21,30 +21,36 @@
 
 import {
   bulkheadParts,
+  cargoCrateParts,
   coffeeStationParts,
   conduitRunParts,
   couchParts,
   deckPlateParts,
+  glowWindowParts,
   hatchParts,
   heatShieldParts,
   ladderSegmentParts,
   lockerParts,
   panelLightParts,
+  radiationSignParts,
   screenParts,
   suitRackParts,
   tableParts,
 } from '../parts'
 import type {
   BulkheadParams,
+  CargoCrateParams,
   CoffeeStationParams,
   ConduitRunParams,
   CouchParams,
   DeckPlateParams,
+  GlowWindowParams,
   HatchParams,
   HeatShieldParams,
   LadderSegmentParams,
   LockerParams,
   PanelLightParams,
+  RadiationSignParams,
   ScreenParams,
   SuitRackParams,
   TableParams,
@@ -226,6 +232,45 @@ export function SuitRack({
   return (
     <group {...placementProps({ position, rotation })}>
       <KitParts parts={suitRackParts(params)} />
+    </group>
+  )
+}
+
+/** Shielded drive-glow window: reactor glow behind a grating, faces local +Z. */
+export function GlowWindow({
+  position,
+  rotation,
+  ...params
+}: GlowWindowParams & PrimitivePlacement) {
+  return (
+    <group {...placementProps({ position, rotation })}>
+      <KitParts parts={glowWindowParts(params)} />
+    </group>
+  )
+}
+
+/** Radiation placard: the three-fold hazard mark on a hazard plate. */
+export function RadiationSign({
+  position,
+  rotation,
+  ...params
+}: RadiationSignParams & PrimitivePlacement) {
+  return (
+    <group {...placementProps({ position, rotation })}>
+      <KitParts parts={radiationSignParts(params)} />
+    </group>
+  )
+}
+
+/** Cargo crate on its skids, webbing tie-downs, hazard placard on local +Z. */
+export function CargoCrate({
+  position,
+  rotation,
+  ...params
+}: CargoCrateParams & PrimitivePlacement) {
+  return (
+    <group {...placementProps({ position, rotation })}>
+      <KitParts parts={cargoCrateParts(params)} />
     </group>
   )
 }

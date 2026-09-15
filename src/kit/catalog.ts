@@ -27,30 +27,36 @@ import {
 import type { Aabb3, MaterialSlot, Vec3 } from '../types'
 import {
   bulkheadParts,
+  cargoCrateParts,
   coffeeStationParts,
   conduitRunParts,
   couchParts,
   deckPlateParts,
+  glowWindowParts,
   hatchParts,
   heatShieldParts,
   ladderSegmentParts,
   lockerParts,
   panelLightParts,
+  radiationSignParts,
   screenParts,
   suitRackParts,
   tableParts,
 } from './parts'
 import type {
   BulkheadParams,
+  CargoCrateParams,
   CoffeeStationParams,
   ConduitRunParams,
   CouchParams,
   DeckPlateParams,
+  GlowWindowParams,
   HatchParams,
   HeatShieldParams,
   LadderSegmentParams,
   LockerParams,
   PanelLightParams,
+  RadiationSignParams,
   ScreenParams,
   SuitRackParams,
   TableParams,
@@ -167,12 +173,45 @@ const SUIT_RACK_DEFAULT: SuitRackParams = {
   helmetRadius: 0.15,
 }
 
+const GLOW_WINDOW_DEFAULT: GlowWindowParams = {
+  width: 1.4,
+  height: 0.9,
+  depth: 0.12,
+  frameWidth: 0.06,
+  glowInset: 0.06,
+  barCount: 5,
+  barWidth: 0.06,
+  barThickness: 0.03,
+}
+
+const RADIATION_SIGN_DEFAULT: RadiationSignParams = {
+  width: 0.4,
+  height: 0.5,
+  thickness: 0.02,
+  hubRadius: 0.04,
+  bladeRadius: 0.07,
+  bladeDistance: 0.11,
+  markThickness: 0.012,
+}
+
+const CARGO_CRATE_DEFAULT: CargoCrateParams = {
+  width: 0.9,
+  height: 0.7,
+  depth: 1.2,
+  skidHeight: 0.06,
+  skidThickness: 0.08,
+  straps: 2,
+  strapWidth: 0.06,
+  strapThickness: 0.02,
+}
+
 /* --------------------------------------------------------------- catalog */
 
 /**
  * The authored kit primitives, in the BUILD_PLAN M2-T1 vocabulary order
  * (bulkhead, deck plate, conduit, panel light, hatch, ladder, then the
- * equipment props) with the drive's heat shield last. `bounds` are the
+ * equipment props) with the drive's heat shield and the M2-T5 additions
+ * (reactor glow window, radiation placard, cargo crate) last. `bounds` are the
  * local-frame extents of the DEFAULT instance above.
  */
 export const KIT_PRIMITIVES: readonly KitPrimitive[] = [
@@ -280,6 +319,30 @@ export const KIT_PRIMITIVES: readonly KitPrimitive[] = [
     materialSlots: ['hazard', 'ceramic'],
     fillsSocket: false,
   },
+  {
+    id: 'glow-window',
+    label: 'Shielded drive-glow window (reactor glow behind a grating)',
+    category: 'thermal',
+    bounds: { min: [-0.7, -0.45, -0.06], max: [0.7, 0.45, 0.09] },
+    materialSlots: ['bulkhead', 'conduit', 'panel-light'],
+    fillsSocket: false,
+  },
+  {
+    id: 'radiation-sign',
+    label: 'Radiation placard (three-fold hazard mark on a hazard plate)',
+    category: 'thermal',
+    bounds: { min: [-0.2, -0.25, -0.01], max: [0.2, 0.25, 0.022] },
+    materialSlots: ['bulkhead', 'hazard'],
+    fillsSocket: false,
+  },
+  {
+    id: 'cargo-crate',
+    label: 'Cargo crate on skids, webbing tie-downs and a hazard placard',
+    category: 'prop',
+    bounds: { min: [-0.45, 0, -0.62], max: [0.45, 0.78, 0.62] },
+    materialSlots: ['bulkhead', 'conduit', 'hazard', 'webbing'],
+    fillsSocket: false,
+  },
 ] as const
 
 /** Every primitive id, in catalog order. */
@@ -363,6 +426,12 @@ export function defaultPrimitiveParts(id: PrimitiveId): KitPart[] {
       return suitRackParts(SUIT_RACK_DEFAULT)
     case 'heat-shield':
       return heatShieldParts(HEAT_SHIELD_DEFAULT)
+    case 'glow-window':
+      return glowWindowParts(GLOW_WINDOW_DEFAULT)
+    case 'radiation-sign':
+      return radiationSignParts(RADIATION_SIGN_DEFAULT)
+    case 'cargo-crate':
+      return cargoCrateParts(CARGO_CRATE_DEFAULT)
     default: {
       const unreachable: never = id
       throw new Error(`kit primitive: no default instance for "${String(unreachable)}"`)

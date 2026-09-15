@@ -3,10 +3,12 @@ import { DECK_CLEAR_M, STANDARD_DOOR_CENTER_M, STANDARD_DOOR_SIZE } from '../typ
 import type { Aabb3 } from '../types'
 import {
   bulkheadParts,
+  cargoCrateParts,
   coffeeStationParts,
   conduitRunParts,
   couchParts,
   deckPlateParts,
+  glowWindowParts,
   hatchParts,
   heatShieldParts,
   ladderSegmentParts,
@@ -17,6 +19,7 @@ import {
   panelLightParts,
   partsBounds,
   partsSize,
+  radiationSignParts,
   screenParts,
   suitRackParts,
   tableParts,
@@ -45,6 +48,12 @@ function expectVec(actual: readonly number[], expected: readonly number[]): void
   for (let i = 0; i < expected.length; i++) {
     expect(actual[i]).toBeCloseTo(expected[i], 9)
   }
+}
+
+/** Box comparison at nm scale — computed sums differ from literals in ulps. */
+function expectBoundsClose(actual: Aabb3, expected: Aabb3): void {
+  expectVec(actual.min, expected.min)
+  expectVec(actual.max, expected.max)
 }
 
 describe('kit part builders (M2-T1)', () => {
@@ -742,6 +751,255 @@ describe('kit part builders (M2-T1)', () => {
           stripeHeight: 0.3,
         }),
       ).toThrow(/does not fit/)
+    })
+  })
+
+  describe('glow window', () => {
+    const PARAMS = {
+      width: 1.4,
+      height: 0.9,
+      depth: 0.12,
+      frameWidth: 0.06,
+      glowInset: 0.06,
+      barCount: 5,
+      barWidth: 0.06,
+      barThickness: 0.03,
+    }
+
+    it('frames the opening, recesses the glow and grates it over the +Z face', () => {
+      const parts = glowWindowParts(PARAMS)
+      expect(parts).toHaveLength(10) // 4 frame rails/jambs + glow + 5 bars
+      expect(slotsOf(parts)).toEqual([
+        'bulkhead',
+        'bulkhead',
+        'bulkhead',
+        'bulkhead',
+        'panel-light',
+        'conduit',
+        'conduit',
+        'conduit',
+        'conduit',
+        'conduit',
+      ])
+
+      // Rails span the full width at the top and bottom of the frame.
+      expectVec(boxAt(parts, 0).size, [1.4, 0.06, 0.12])
+      expectVec(boxAt(parts, 0).position, [0, 0.42, 0])
+      expectVec(boxAt(parts, 1).position, [0, -0.42, 0])
+      // Jambs fill the corners: the opening is exactly width/height − 2·frame.
+      for (const [index, x] of [
+        [2, -0.67],
+        [3, 0.67],
+      ] as const) {
+        expectVec(boxAt(parts, index).size, [0.06, 0.78, 0.12])
+        expectVec(boxAt(parts, index).position, [x, 0, 0])
+      }
+
+      // The glow is RECESSED — it never reaches the frame's own +Z face.
+      const glow = boxAt(parts, 4)
+      expect(glow.size[0]).toBeCloseTo(1.28 * (1 - 2 * 0.06), 9)
+      expect(glow.size[1]).toBeCloseTo(0.78 * (1 - 2 * 0.06), 9)
+      expectVec(glow.position, [0, 0, 0])
+      expect(glow.size[2]).toBeLessThan(PARAMS.depth)
+
+      // Bars are proud of the frame, evenly spread across the opening.
+      const bars = parts.slice(5)
+      const barX = bars.map((part) => part.position[0])
+      expectVec(barX, [-0.512, -0.256, 0, 0.256, 0.512])
+      for (const bar of bars) {
+        expect(bar.kind).toBe('box')
+        expectVec((bar as BoxPart).size, [0.06, 0.78, 0.03])
+        expect(bar.position[2]).toBeCloseTo(0.075, 9)
+      }
+
+      expectBoundsClose(partsBounds(parts), {
+        min: [-0.7, -0.45, -0.06],
+        max: [0.7, 0.45, 0.09],
+      })
+    })
+
+    it('an unshielded window is frame + recessed glow only', () => {
+      const parts = glowWindowParts({ ...PARAMS, barCount: 0 })
+      expect(parts).toHaveLength(5)
+      expect(slotsOf(parts)).toEqual([
+        'bulkhead',
+        'bulkhead',
+        'bulkhead',
+        'bulkhead',
+        'panel-light',
+      ])
+      expect(partsBounds(parts).max[2]).toBeCloseTo(0.06, 9)
+    })
+
+    it('rejects a frame with no opening, bars that do not fit and bad params', () => {
+      expect(() => glowWindowParts({ ...PARAMS, frameWidth: 0.7 })).toThrow(
+        /leaves no opening/,
+      )
+      expect(() => glowWindowParts({ ...PARAMS, barCount: 4, barWidth: 0.5 })).toThrow(
+        /do not fit/,
+      )
+      expect(() => glowWindowParts({ ...PARAMS, glowInset: 0.5 })).toThrow(
+        /glowInset must be in/,
+      )
+      expect(() => glowWindowParts({ ...PARAMS, barCount: -1 })).toThrow(
+        /non-negative integer/,
+      )
+      expect(() => glowWindowParts({ ...PARAMS, depth: 0 })).toThrow(/must be positive/)
+    })
+  })
+
+  describe('radiation sign', () => {
+    const PARAMS = {
+      width: 0.4,
+      height: 0.5,
+      thickness: 0.02,
+      hubRadius: 0.04,
+      bladeRadius: 0.07,
+      bladeDistance: 0.11,
+      markThickness: 0.012,
+    }
+
+    it('is a hazard plate with the three-fold mark proud of its +Z face', () => {
+      const parts = radiationSignParts(PARAMS)
+      expect(parts).toHaveLength(5) // plate + hub + 3 blades
+      expect(slotsOf(parts)).toEqual([
+        'hazard',
+        'bulkhead',
+        'bulkhead',
+        'bulkhead',
+        'bulkhead',
+      ])
+
+      const plate = boxAt(parts, 0)
+      expectVec(plate.size, [0.4, 0.5, 0.02])
+      expectVec(plate.position, [0, 0, 0])
+
+      // The mark sits PROUD of the plate: hub and blades share one plane.
+      const markZ = 0.01 + 0.012 / 2
+      const hub = cylinderAt(parts, 1)
+      expectVec([hub.radius, hub.length], [0.04, 0.012])
+      expect(hub.axis).toBe('z')
+      expectVec(hub.position, [0, 0, markZ])
+
+      const blades = parts.slice(2).map((part) => part as CylinderPart)
+      expect(blades).toHaveLength(3)
+      const angles = blades
+        .map((blade) => {
+          const degrees =
+            (Math.atan2(blade.position[1], blade.position[0]) * 180) / Math.PI
+          return ((degrees % 360) + 360) % 360
+        })
+        .sort((a, b) => a - b)
+      expect(angles[0]).toBeCloseTo(90, 6)
+      expect(angles[1]).toBeCloseTo(210, 6)
+      expect(angles[2]).toBeCloseTo(330, 6)
+      for (const blade of blades) {
+        expect(blade.radius).toBeCloseTo(0.07, 9)
+        expect(blade.axis).toBe('z')
+        expect(blade.position[2]).toBeCloseTo(markZ, 9)
+        // Every blade is at the same radius and inside the plate.
+        expect(Math.hypot(blade.position[0], blade.position[1])).toBeCloseTo(0.11, 9)
+        expect(partBounds(blade).min[0]).toBeGreaterThan(-0.2)
+        expect(partBounds(blade).max[1]).toBeLessThan(0.25)
+      }
+
+      // The plate sets the bounds: the mark can never widen the placard.
+      expectBoundsClose(partsBounds(parts), {
+        min: [-0.2, -0.25, -0.01],
+        max: [0.2, 0.25, 0.022],
+      })
+    })
+
+    it('rejects a mark that does not fit inside its placard', () => {
+      expect(() => radiationSignParts({ ...PARAMS, bladeDistance: 0.3 })).toThrow(
+        /does not fit inside/,
+      )
+      expect(() => radiationSignParts({ ...PARAMS, hubRadius: 0.25 })).toThrow(
+        /does not fit inside/,
+      )
+      expect(() => radiationSignParts({ ...PARAMS, markThickness: 0 })).toThrow(
+        /must be positive/,
+      )
+    })
+  })
+
+  describe('cargo crate', () => {
+    const PARAMS = {
+      width: 0.9,
+      height: 0.7,
+      depth: 1.2,
+      skidHeight: 0.06,
+      skidThickness: 0.08,
+      straps: 2,
+      strapWidth: 0.06,
+      strapThickness: 0.02,
+    }
+
+    it('rides on skids, is strapped over the lid and down both ends, and is placarded', () => {
+      const parts = cargoCrateParts(PARAMS)
+      expect(parts).toHaveLength(10) // 2 skids + body + 2 straps × 3 pieces + placard
+      expect(slotsOf(parts).filter((slot) => slot === 'webbing')).toHaveLength(6)
+
+      // Skids stand on local y = 0, inset under the crate's depth.
+      for (const index of [0, 1] as const) {
+        const skid = boxAt(parts, index)
+        expectVec(skid.size, [0.9, 0.06, 0.08])
+        expect(skid.position[1]).toBeCloseTo(0.03, 9)
+      }
+      expect(boxAt(parts, 0).position[2]).toBeCloseTo(0.56, 9)
+      expect(boxAt(parts, 1).position[2]).toBeCloseTo(-0.56, 9)
+
+      // The body sits ON the skids.
+      const body = boxAt(parts, 2)
+      expectVec(body.size, [0.9, 0.7, 1.2])
+      expect(body.position[1]).toBeCloseTo(0.06 + 0.35, 9)
+
+      // Two straps, one per bay: over the lid and down both ends.
+      const topBands = parts.filter(
+        (part) => part.materialSlot === 'webbing' && part.position[1] > 0.7,
+      )
+      expectVec(
+        topBands.map((part) => part.position[0]),
+        [-0.225, 0.225],
+      )
+      for (const band of topBands) {
+        expectVec((band as BoxPart).size, [0.06, 0.02, 1.24])
+      }
+      const endBands = parts.filter(
+        (part) => part.materialSlot === 'webbing' && part.position[1] < 0.7,
+      )
+      expectVec(
+        endBands.map((part) => part.position[2]),
+        [0.61, -0.61, 0.61, -0.61],
+      )
+
+      // The placard is on the crate's +Z face and thinner than the straps.
+      const placard = boxAt(parts, parts.length - 1)
+      expect(placard.materialSlot).toBe('hazard')
+      expectVec(placard.size, [0.4, 0.12, 0.008])
+      expect(placard.position[1]).toBeCloseTo(0.76 - 0.06 - 0.06, 9)
+      expect(placard.position[2] + placard.size[2] / 2).toBeLessThan(
+        0.6 + PARAMS.strapThickness,
+      )
+
+      // Bounds: the straps — never the placard — define the crate's envelope.
+      expectBoundsClose(partsBounds(parts), {
+        min: [-0.45, 0, -0.62],
+        max: [0.45, 0.78, 0.62],
+      })
+    })
+
+    it('rejects a strap wider than its bay, oversized skids and a placard that does not fit', () => {
+      expect(() => cargoCrateParts({ ...PARAMS, strapWidth: 0.6 })).toThrow(
+        /wider than its/,
+      )
+      expect(() => cargoCrateParts({ ...PARAMS, skidThickness: 0.7 })).toThrow(
+        /do not fit under/,
+      )
+      expect(() => cargoCrateParts({ ...PARAMS, straps: 0 })).toThrow(
+        /positive integer/,
+      )
+      expect(() => cargoCrateParts({ ...PARAMS, height: 0.2 })).toThrow(/placard/)
     })
   })
 

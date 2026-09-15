@@ -8,3 +8,5 @@
 export * from './HeadModule'
 export * from './GalleyModule'
 export * from './OpsModule'
+export * from './EngineeringModule'
+export * from './StorageModule'

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { kitManifestProblems } from '../../types'
 import { CONTRACT_KIT } from '../../validation/contractKit'
+import { ENGINEERING_MODULE } from './engineering'
 import { GALLEY_MODULE } from './galley'
 import { HEAD_MODULE } from './head'
 import { moduleContractProblems, moduleProblems } from './integrity'
@@ -12,6 +13,7 @@ import {
   authoredKitProblems,
   getAuthoredModule,
 } from './registry'
+import { STORAGE_MODULE } from './storage'
 import type { AuthoredModule } from './types'
 
 /** A deep clone of the bridge that a test may damage. */
@@ -20,20 +22,26 @@ function cloneModule(): AuthoredModule {
 }
 
 describe('authored kit registry (M2-T2)', () => {
-  it('registers the bridge, the galley/bunk and the ops deck as a KitManifest', () => {
+  it('registers all five room modules as a KitManifest', () => {
     expect(AUTHORED_MODULES.map((module) => module.manifest.id)).toEqual([
       'head',
       'galley',
       'ops',
+      'engineering',
+      'storage',
     ])
     expect(AUTHORED_KIT.modules).toEqual([
       HEAD_MODULE.manifest,
       GALLEY_MODULE.manifest,
       OPS_MODULE.manifest,
+      ENGINEERING_MODULE.manifest,
+      STORAGE_MODULE.manifest,
     ])
     expect(getAuthoredModule('head')).toBe(HEAD_MODULE)
     expect(getAuthoredModule('galley')).toBe(GALLEY_MODULE)
     expect(getAuthoredModule('ops')).toBe(OPS_MODULE)
+    expect(getAuthoredModule('engineering')).toBe(ENGINEERING_MODULE)
+    expect(getAuthoredModule('storage')).toBe(STORAGE_MODULE)
     expect(() => getAuthoredModule('spine')).toThrow(/no module "spine"/)
   })
 

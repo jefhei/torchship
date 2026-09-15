@@ -44,6 +44,9 @@ describe('kit primitive catalog (M2-T1)', () => {
       'coffee-station',
       'suit-rack',
       'heat-shield',
+      'glow-window',
+      'radiation-sign',
+      'cargo-crate',
     ])
   })
 
@@ -127,8 +130,12 @@ describe('kit primitive catalog (M2-T1)', () => {
       'hatch',
       'ladder-segment',
     ])
-    expect(primitivesInCategory('prop')).toHaveLength(6)
-    expect(primitivesInCategory('thermal').map((p) => p.id)).toEqual(['heat-shield'])
+    expect(primitivesInCategory('prop')).toHaveLength(7)
+    expect(primitivesInCategory('thermal').map((p) => p.id)).toEqual([
+      'heat-shield',
+      'glow-window',
+      'radiation-sign',
+    ])
   })
 
   it('primitiveBounds/primitiveDimensions report the declared box', () => {
