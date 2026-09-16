@@ -256,6 +256,133 @@ describe('kit part builders (M2-T1)', () => {
         }),
       ).toThrow(/non-negative integer/)
     })
+
+    it('cuts a crawl opening as a closed frame of four strips', () => {
+      const parts = deckPlateParts({
+        width: 1.4,
+        depth: 1.4,
+        thickness: 0.2,
+        opening: { width: 0.7, depth: 0.7 },
+      })
+      expect(parts).toHaveLength(4)
+      expect(slotsOf(parts)).toEqual([
+        'deckplate',
+        'deckplate',
+        'deckplate',
+        'deckplate',
+      ])
+      // −x strip, +x strip (both full depth), then the −z / +z end strips.
+      expectVec(boxAt(parts, 0).size, [0.35, 0.2, 1.4])
+      expectVec(boxAt(parts, 0).position, [-0.525, -0.1, 0])
+      expectVec(boxAt(parts, 1).size, [0.35, 0.2, 1.4])
+      expectVec(boxAt(parts, 1).position, [0.525, -0.1, 0])
+      expectVec(boxAt(parts, 2).size, [0.7, 0.2, 0.35])
+      expectVec(boxAt(parts, 2).position, [0, -0.1, -0.525])
+      expectVec(boxAt(parts, 3).size, [0.7, 0.2, 0.35])
+      expectVec(boxAt(parts, 3).position, [0, -0.1, 0.525])
+
+      // The plate still spans its full footprint, with the walking surface at
+      // local y = 0, and the solid area is exactly plate − hole.
+      expectBoundsClose(partsBounds(parts), {
+        min: [-0.7, -0.2, -0.7],
+        max: [0.7, 0, 0.7],
+      })
+      const area = parts.reduce(
+        (sum, part) => sum + (part.kind === 'box' ? part.size[0] * part.size[2] : 0),
+        0,
+      )
+      expect(area).toBeCloseTo(1.4 * 1.4 - 0.7 * 0.7, 9)
+    })
+
+    it('follows an off-centre opening with the frame around it', () => {
+      const parts = deckPlateParts({
+        width: 1.4,
+        depth: 1.4,
+        thickness: 0.2,
+        opening: { width: 0.6, depth: 0.5, centerX: 0.2, centerZ: -0.25 },
+      })
+      expectVec(boxAt(parts, 0).size, [0.6, 0.2, 1.4])
+      expectVec(boxAt(parts, 0).position, [-0.4, -0.1, 0])
+      expectVec(boxAt(parts, 1).size, [0.2, 0.2, 1.4])
+      expectVec(boxAt(parts, 1).position, [0.6, -0.1, 0])
+      expectVec(boxAt(parts, 2).size, [0.6, 0.2, 0.2])
+      expectVec(boxAt(parts, 2).position, [0.2, -0.1, -0.6])
+      expectVec(boxAt(parts, 3).size, [0.6, 0.2, 0.7])
+      expectVec(boxAt(parts, 3).position, [0.2, -0.1, 0.35])
+      // −0 never escapes: a zero-centred or zero-edge coordinate stays +0.
+      const centred = deckPlateParts({
+        width: 1.4,
+        depth: 1.4,
+        thickness: 0.2,
+        opening: { width: 0.7, depth: 0.7, centerX: 0, centerZ: 0 },
+      })
+      expect(centred).toEqual(
+        deckPlateParts({
+          width: 1.4,
+          depth: 1.4,
+          thickness: 0.2,
+          opening: { width: 0.7, depth: 0.7 },
+        }),
+      )
+    })
+
+    it('rejects an opening that leaves no frame to walk on', () => {
+      const plate = { width: 1.4, depth: 1.4, thickness: 0.2 }
+      expect(() =>
+        deckPlateParts({ ...plate, opening: { width: 1.4, depth: 1.4 } }),
+      ).toThrow(/leaves no plate/)
+      expect(() =>
+        deckPlateParts({
+          ...plate,
+          opening: { width: 0.7, depth: 0.7, centerX: 0.5 },
+        }),
+      ).toThrow(/leaves no plate/)
+      expect(() =>
+        deckPlateParts({
+          ...plate,
+          opening: { width: 0.7, depth: 0.7, centerZ: -0.5 },
+        }),
+      ).toThrow(/leaves no plate/)
+      expect(() =>
+        deckPlateParts({ ...plate, opening: { width: 0, depth: 0.7 } }),
+      ).toThrow(/opening.width must be positive/)
+      expect(() =>
+        deckPlateParts({
+          ...plate,
+          opening: { width: 0.7, depth: 0.7, centerX: Number.NaN },
+        }),
+      ).toThrow(/centerX must be finite/)
+      expect(() =>
+        deckPlateParts({
+          ...plate,
+          opening: { width: 0.7, depth: 0.7, centerZ: Number.POSITIVE_INFINITY },
+        }),
+      ).toThrow(/centerZ must be finite/)
+    })
+
+    it('refuses cable runs across a crawl opening (the ducts would be cut)', () => {
+      expect(() =>
+        deckPlateParts({
+          width: 1.4,
+          depth: 1.4,
+          thickness: 0.2,
+          opening: { width: 0.7, depth: 0.7 },
+          cableRuns: { count: 1, width: 0.12, height: 0.06, spacing: 1.6 },
+        }),
+      ).toThrow(/cable runs cannot cross/)
+    })
+
+    it('leaves the solid-plate build unchanged', () => {
+      const solid = {
+        width: 3,
+        depth: 2,
+        thickness: 0.2,
+        cableRuns: { count: 2, width: 0.12, height: 0.06, spacing: 1.2 },
+      }
+      const explicit = deckPlateParts({ ...solid, opening: undefined })
+      expect(explicit).toEqual(deckPlateParts(solid))
+      expect(explicit).toHaveLength(3)
+    })
   })
 
   describe('conduit run', () => {

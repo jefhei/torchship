@@ -24,11 +24,26 @@
  * their sockets to the numbers they were authored with.
  */
 
-import { MM, doorSizeOf, kitManifestProblems } from '../../types'
+import {
+  MM,
+  STANDARD_DOOR_CENTER_M,
+  STANDARD_DOOR_SIZE,
+  doorCenterDeckOffsetM,
+  doorSizeOf,
+  isStandardDoorCenter,
+  kitManifestProblems,
+} from '../../types'
 import type { Aabb3, DoorSocket, DoorSize, KitManifest } from '../../types'
 import { SEAM_TOLERANCES } from '../../spikes/seams/tolerances'
 import { partBounds } from '../parts'
-import { assemblyParts, moduleBounds, moduleParts, moduleSolidParts } from './types'
+import {
+  SHAFT_FACES,
+  assemblyParts,
+  isShaftFace,
+  moduleBounds,
+  moduleParts,
+  moduleSolidParts,
+} from './types'
 import type { AuthoredModule } from './types'
 
 /** Socket authoring budget (±0.5 mm per axis) — the M0-T2 measured tolerance. */
@@ -75,6 +90,66 @@ export function doorwayPrism(socket: DoorSocket): Aabb3 {
     min: [px - halfX, py - halfHeight, pz - halfZ],
     max: [px + halfX, py + halfHeight, pz + halfZ],
   }
+}
+
+/**
+ * Shaft-band doorway rules (M2-T6): one doorway per shaft face, each named for
+ * the face it sits in, at the standard 1.0 m centre with the standard
+ * 0.9 × 2.0 opening. Those four standard doorways ARE the band contract the
+ * rooms land their spine-doors on (src/validation/sockets.ts
+ * `spineBandDoors`); flushness in each face is the manifest contract's job
+ * (`kitManifestProblems`, run first). No `spine-door` and no other doorway
+ * exists on a shaft band — the shaft joins every room on a deck, so it cannot
+ * privilege one face, and the ROOM owns the hatch that seals each join.
+ */
+function shaftDoorProblems(module: AuthoredModule, where: string): string[] {
+  const problems: string[] = []
+  const sockets = module.manifest.doorSockets
+
+  for (const face of SHAFT_FACES) {
+    const onFace = sockets.filter((socket) => socket.id === face)
+    if (onFace.length !== 1) {
+      problems.push(
+        `${where}: shaft needs exactly one "${face}" doorway, found ${onFace.length}`,
+      )
+      continue
+    }
+    const socket = onFace[0]
+    if (socket.facing !== face) {
+      problems.push(
+        `${where}: shaft doorway "${face}" faces ${socket.facing}, expected ${face}`,
+      )
+    }
+    if (!isStandardDoorCenter(socket)) {
+      const offsetMm = (doorCenterDeckOffsetM(socket) / MM).toFixed(1)
+      problems.push(
+        `${where}: shaft doorway "${face}" sits ${offsetMm} mm off the standard ` +
+          `${STANDARD_DOOR_CENTER_M} m centre (the band's doorways are all standard — ` +
+          `a non-standard centre would step every room that lands on it)`,
+      )
+    }
+    const door = doorSizeOf(socket)
+    if (
+      door.width !== STANDARD_DOOR_SIZE.width ||
+      door.height !== STANDARD_DOOR_SIZE.height
+    ) {
+      problems.push(
+        `${where}: shaft doorway "${face}" opening is ${door.width} × ${door.height} m, ` +
+          `expected the standard ${STANDARD_DOOR_SIZE.width} × ${STANDARD_DOOR_SIZE.height} m`,
+      )
+    }
+  }
+
+  const extra = sockets.filter((socket) => !isShaftFace(socket.id))
+  if (extra.length > 0) {
+    const ids = extra.map((socket) => socket.id).join(', ')
+    problems.push(
+      `${where}: declares doorway(s) ${ids} that are not shaft faces ` +
+        `(a band presents one doorway per face: ${SHAFT_FACES.join(', ')})`,
+    )
+  }
+
+  return problems
 }
 
 /**
@@ -136,23 +211,32 @@ export function moduleProblems(module: AuthoredModule): string[] {
     }
   }
 
-  // Exactly one standardized spine door, flush in the −z face (M0-T5 layout).
-  const spineDoors = manifest.doorSockets.filter((socket) => socket.id === 'spine-door')
-  if (spineDoors.length !== 1) {
-    problems.push(
-      `${where}: needs exactly one "spine-door" socket, found ${spineDoors.length}`,
-    )
+  // Doorways. A ROOM presents exactly one standardized spine-door, flush in
+  // its −z face (the M0-T5 layout); the SHAFT presents one doorway per face,
+  // every one of them the standard door — the four sockets the validator's
+  // synthesized per-deck band presents to the rooms that land on it.
+  if (module.shaft === true) {
+    problems.push(...shaftDoorProblems(module, where))
   } else {
-    const door = spineDoors[0]
-    if (door.facing !== '-z') {
-      problems.push(`${where}: spine-door faces ${door.facing}, expected −z`)
-    }
-    const expectedZ = -manifest.dimensions[2] / 2
-    const offFaceM = Math.abs(door.position[2] - expectedZ)
-    if (offFaceM > SOCKET_EPS_M) {
+    const spineDoors = manifest.doorSockets.filter(
+      (socket) => socket.id === 'spine-door',
+    )
+    if (spineDoors.length !== 1) {
       problems.push(
-        `${where}: spine-door sits ${(offFaceM / MM).toFixed(1)} mm off its −z face`,
+        `${where}: needs exactly one "spine-door" socket, found ${spineDoors.length}`,
       )
+    } else {
+      const door = spineDoors[0]
+      if (door.facing !== '-z') {
+        problems.push(`${where}: spine-door faces ${door.facing}, expected −z`)
+      }
+      const expectedZ = -manifest.dimensions[2] / 2
+      const offFaceM = Math.abs(door.position[2] - expectedZ)
+      if (offFaceM > SOCKET_EPS_M) {
+        problems.push(
+          `${where}: spine-door sits ${(offFaceM / MM).toFixed(1)} mm off its −z face`,
+        )
+      }
     }
   }
 

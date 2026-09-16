@@ -13,6 +13,7 @@ import {
   authoredKitProblems,
   getAuthoredModule,
 } from './registry'
+import { SPINE_MODULE } from './spine'
 import { STORAGE_MODULE } from './storage'
 import type { AuthoredModule } from './types'
 
@@ -22,13 +23,14 @@ function cloneModule(): AuthoredModule {
 }
 
 describe('authored kit registry (M2-T2)', () => {
-  it('registers all five room modules as a KitManifest', () => {
+  it('registers every authored module (five rooms + the shaft band)', () => {
     expect(AUTHORED_MODULES.map((module) => module.manifest.id)).toEqual([
       'head',
       'galley',
       'ops',
       'engineering',
       'storage',
+      'spine',
     ])
     expect(AUTHORED_KIT.modules).toEqual([
       HEAD_MODULE.manifest,
@@ -36,13 +38,15 @@ describe('authored kit registry (M2-T2)', () => {
       OPS_MODULE.manifest,
       ENGINEERING_MODULE.manifest,
       STORAGE_MODULE.manifest,
+      SPINE_MODULE.manifest,
     ])
     expect(getAuthoredModule('head')).toBe(HEAD_MODULE)
     expect(getAuthoredModule('galley')).toBe(GALLEY_MODULE)
     expect(getAuthoredModule('ops')).toBe(OPS_MODULE)
     expect(getAuthoredModule('engineering')).toBe(ENGINEERING_MODULE)
     expect(getAuthoredModule('storage')).toBe(STORAGE_MODULE)
-    expect(() => getAuthoredModule('spine')).toThrow(/no module "spine"/)
+    expect(getAuthoredModule('spine')).toBe(SPINE_MODULE)
+    expect(() => getAuthoredModule('airlock')).toThrow(/no module "airlock"/)
   })
 
   it('is clean: per-module integrity, contract diff and the manifest contract', () => {

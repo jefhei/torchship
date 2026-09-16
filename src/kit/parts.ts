@@ -169,6 +169,23 @@ export interface DeckPlateCableRuns {
   spacing: number
 }
 
+/**
+ * A hole through a deck plate — the vertical-navigation equivalent of a
+ * bulkhead's doorway cut. The M2-T6 spine shaft's crawl opening (the ladder's
+ * passage between decks) is the first consumer; it is cut by the builder, so
+ * the shaft floor is never freehand geometry (BUILD_PLAN rule 8).
+ */
+export interface DeckPlateOpening {
+  /** Opening extent along X, meters. */
+  width: number
+  /** Opening extent along Z, meters. */
+  depth: number
+  /** Opening centre along X, meters; omitted = 0 (centred in the plate). */
+  centerX?: number
+  /** Opening centre along Z, meters; omitted = 0 (centred in the plate). */
+  centerZ?: number
+}
+
 export interface DeckPlateParams {
   width: number
   depth: number
@@ -176,16 +193,31 @@ export interface DeckPlateParams {
   thickness: number
   /** Raised cable-run ducts on the plate (§4: "deck plate with cable runs"). */
   cableRuns?: DeckPlateCableRuns
+  /**
+   * Optional crawl opening cut through the plate. The plate is then emitted
+   * as the four pieces that SURROUND the hole, so the opening is exactly
+   * `width × depth` and the solid area is exactly
+   * `width·depth − opening.width·opening.depth` — the geometry the M3-T2
+   * watertight check measures against. Mutually exclusive with `cableRuns`:
+   * the ducts run the full width of the plate and an opening breaks them.
+   */
+  opening?: DeckPlateOpening
 }
 
 /**
  * A deck plate whose WALKING SURFACE is local y = 0 (the plate is the
  * structure beneath it, like the 0.2 m deck-plate in the deck pitch). Cable
- * runs sit on top of the plate as low ducts across the full width.
+ * runs sit on top of the plate as low ducts across the full width. With an
+ * `opening`, the plate is instead a closed frame around a rectangular hole
+ * (the crawl / ladder passage) — still four boxes, still built here.
  */
 export function deckPlateParts(params: DeckPlateParams): KitPart[] {
-  const { width, depth, thickness, cableRuns } = params
+  const { width, depth, thickness, cableRuns, opening } = params
   requirePositive({ width, depth, thickness }, 'deck plate')
+
+  if (opening !== undefined) {
+    return deckPlateFrame(width, depth, thickness, opening, cableRuns)
+  }
 
   const parts: KitPart[] = [
     box('deckplate', [width, thickness, depth], [0, n0(-thickness / 2), 0]),
@@ -215,6 +247,84 @@ export function deckPlateParts(params: DeckPlateParams): KitPart[] {
   }
 
   return parts
+}
+
+/**
+ * A deck plate as the closed frame of DECKPLATE around a rectangular crawl
+ * opening: a strip on either side of the hole along X (full depth) plus the
+ * two end strips between them, all at the plate's own y (walking surface at
+ * 0, structure below). The four strips are ordered −x, +x, −z, +z.
+ */
+function deckPlateFrame(
+  width: number,
+  depth: number,
+  thickness: number,
+  opening: DeckPlateOpening,
+  cableRuns: DeckPlateCableRuns | undefined,
+): KitPart[] {
+  const { width: openingWidth, depth: openingDepth } = opening
+  const centerX = opening.centerX ?? 0
+  const centerZ = opening.centerZ ?? 0
+  requirePositive(
+    { 'opening.width': openingWidth, 'opening.depth': openingDepth },
+    'deck plate',
+  )
+  if (!Number.isFinite(centerX)) {
+    throw new Error(`deck plate: opening.centerX must be finite, got ${centerX}`)
+  }
+  if (!Number.isFinite(centerZ)) {
+    throw new Error(`deck plate: opening.centerZ must be finite, got ${centerZ}`)
+  }
+  if (cableRuns !== undefined) {
+    throw new Error(
+      'deck plate: cable runs cannot cross a crawl opening — the ducts run the ' +
+        'full width of the plate (route them on a plate without an opening)',
+    )
+  }
+
+  const halfWidth = width / 2
+  const halfDepth = depth / 2
+  const xLo = n0(centerX - openingWidth / 2)
+  const xHi = n0(centerX + openingWidth / 2)
+  const zLo = n0(centerZ - openingDepth / 2)
+  const zHi = n0(centerZ + openingDepth / 2)
+
+  // Plate material left of and right of the hole (full depth), then the end
+  // strips that close the frame between them. Every strip must survive: an
+  // opening as large as the plate (or one pushed off its edge) leaves the
+  // deck with nothing to walk on.
+  const leftWidth = n0(xLo + halfWidth)
+  const rightWidth = n0(halfWidth - xHi)
+  const aftDepth = n0(zLo + halfDepth)
+  const foreDepth = n0(halfDepth - zHi)
+  if (leftWidth <= EPS || rightWidth <= EPS) {
+    throw new Error(
+      `deck plate: opening ${openingWidth} m wide at centre x ${centerX} m ` +
+        `leaves no plate of a ${width} m deck`,
+    )
+  }
+  if (aftDepth <= EPS || foreDepth <= EPS) {
+    throw new Error(
+      `deck plate: opening ${openingDepth} m deep at centre z ${centerZ} m ` +
+        `leaves no plate of a ${depth} m deck`,
+    )
+  }
+
+  const y = n0(-thickness / 2)
+  return [
+    box('deckplate', [leftWidth, thickness, depth], [n0((-halfWidth + xLo) / 2), y, 0]),
+    box('deckplate', [rightWidth, thickness, depth], [n0((xHi + halfWidth) / 2), y, 0]),
+    box(
+      'deckplate',
+      [openingWidth, thickness, aftDepth],
+      [n0(centerX), y, n0((-halfDepth + zLo) / 2)],
+    ),
+    box(
+      'deckplate',
+      [openingWidth, thickness, foreDepth],
+      [n0(centerX), y, n0((zHi + halfDepth) / 2)],
+    ),
+  ]
 }
 
 /* ---------------------------------------------------------------- utility */

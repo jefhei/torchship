@@ -9,8 +9,10 @@
  * supplied) the contract diff against the M0-T5 fixture-time socket origins.
  *
  * It grows one line per authored module; today that is the bridge (`head`), the
- * galley/bunk (`galley`), the ops deck (`ops`), engineering (`engineering`) and
- * the long-haul hold (`storage`).
+ * galley/bunk (`galley`), the ops deck (`ops`), engineering (`engineering`),
+ * the long-haul hold (`storage`) and the vertical trunk (`spine`, the shaft
+ * band the assembler instantiates once per deck — the only module no spec ref
+ * names).
  */
 
 import type { KitManifest } from '../../types'
@@ -19,6 +21,7 @@ import { GALLEY_MODULE } from './galley'
 import { HEAD_MODULE } from './head'
 import { moduleContractProblems, moduleProblems } from './integrity'
 import { OPS_MODULE } from './ops'
+import { SPINE_MODULE } from './spine'
 import { STORAGE_MODULE } from './storage'
 import type { AuthoredModule } from './types'
 
@@ -29,6 +32,7 @@ export const AUTHORED_MODULES: readonly AuthoredModule[] = [
   OPS_MODULE,
   ENGINEERING_MODULE,
   STORAGE_MODULE,
+  SPINE_MODULE,
 ]
 
 /** The authored kit as the assembler reads it (M1-T2 manifest). */

@@ -19,10 +19,23 @@
  *    harness diffs against the module's parts.
  */
 
-import type { Aabb3, KitModule, MaterialSlot } from '../../types'
+import type { Aabb3, Facing, KitModule, MaterialSlot } from '../../types'
 import type { KitPart, PrimitivePlacement } from '../types'
 import { partBounds, partMaterialSlots, partsBounds } from '../parts'
 import { placeParts } from './placement'
+
+/**
+ * The four vertical faces of a ship module, in the canonical order the spine
+ * band's doorways are authored and synthesized in (src/validation/sockets.ts
+ * `spineBandDoors`, the M0-T2 white-box band). A room presents ONE of these
+ * as its `spine-door`; the shaft (M2-T6) presents one doorway per face.
+ */
+export const SHAFT_FACES: readonly Facing[] = ['+z', '-z', '+x', '-x']
+
+/** True when `id` names one of the shaft's four faces (a shaft doorway id). */
+export function isShaftFace(id: string): id is Facing {
+  return (SHAFT_FACES as readonly string[]).includes(id)
+}
 
 /**
  * One authored piece of a module: a primitive's parts + where the module puts
@@ -49,6 +62,15 @@ export interface AuthoredModule {
   manifest: KitModule
   /** Named assemblies, in build order. */
   assemblies: readonly ModuleAssembly[]
+  /**
+   * True for the SHIPPING SHAFT module (M2-T6 `spine`): it presents one
+   * doorway per shaft face ('+z' / '−z' / '+x' / '−x') instead of the one
+   * standardized `spine-door` a room presents, and the assembler instantiates
+   * it once per deck rather than from a spec ref (src/types/ship.ts:
+   * "the spine shaft is NOT referenced — the assembler synthesizes one spine
+   * band per deck"). Omitted = an ordinary room module.
+   */
+  shaft?: boolean
 }
 
 /** An assembly's parts in module-local meters. */
