@@ -22,7 +22,7 @@ on:
 
 jobs:
   static:
-    name: Lint, format, types, material slots
+    name: Lint, format, types, material slots, kit harness
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +35,7 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm run check:slots
+      - run: npm run check:kit
 
   test:
     name: Vitest

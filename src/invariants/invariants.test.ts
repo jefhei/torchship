@@ -13,12 +13,11 @@
  *  - the live checks PASS on the three real ships and FAIL the stress rig
  *    at the declared decks: hatch-alignment (socket-resolved, LIVE at
  *    M1-T3), spine-connectivity and spawn-inside spec facet (live since
- *    M0-T6);
- *  - stub invariants (seams-watertight, collision-match, room-lit) are
- *    declared targets: the harness reports them 'deferred' with their
- *    owning milestone — the input they need (assembled geometry, collision
- *    hulls, light sockets) does not exist until M2-T7 / M3-T2 / M3-T3 /
- *    M3-T6 land;
+ *    M0-T6), room-lit (live at M2-T7 over the authored kit's light sockets);
+ *  - stub invariants (seams-watertight, collision-match) are declared
+ *    targets: the harness reports them 'deferred' with their owning
+ *    milestone — the input they need (assembled geometry, collision hulls)
+ *    does not exist until M3-T2 / M3-T3 land;
  *  - the harness runs over all four fixtures without throwing and returns
  *    attributable runs (fixture × invariant).
  *
@@ -32,6 +31,7 @@ import {
   INVARIANT_IDS,
   LIVE_CHECKS,
   checkHatchAlignment,
+  checkRoomLit,
   checkSpineConnectivity,
   checkSpawnInsideSpec,
   deckGridErrorMm,
@@ -42,6 +42,8 @@ import {
   isSeatedWithinHatch,
   liveInvariants,
   moduleSeatProblems,
+  roomLightTally,
+  roomLitProblems,
   runsForInvariant,
   runInvariant,
   runInvariantById,
@@ -64,7 +66,8 @@ import {
 import type { RoomModuleId } from '../fixtures'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import { deckFloorYFor } from '../types'
-import type { DeckSpec, ModuleRef, ShipSpec } from '../types'
+import type { DeckSpec, KitManifest, ModuleRef, ShipSpec } from '../types'
+import { AUTHORED_KIT } from '../kit/modules/registry'
 
 /* ---------- helpers ------------------------------------------------ */
 
@@ -93,14 +96,7 @@ function miniSpec(roomPerDeck: RoomModuleId[]): ShipSpec {
 const CANONICAL_THREE = miniSpec(['head', 'galley', 'engineering'])
 
 /** Expected run-status rows: [seams, hatch, spine, collision, spawn, lit]. */
-const DEFERRED_ROW = [
-  'deferred',
-  'pass',
-  'pass',
-  'deferred',
-  'pass',
-  'deferred',
-] as const
+const REAL_SHIP_ROW = ['deferred', 'pass', 'pass', 'deferred', 'pass', 'pass'] as const
 
 /* ---------- registry ----------------------------------------------- */
 
@@ -137,16 +133,16 @@ describe('invariant registry (PRD §8 [auto])', () => {
     expect(SEAM_TOLERANCES.hatchAlignMm).toBe(5)
   })
 
-  it('marks the three spec-level checks live and the other three as stubs', () => {
+  it('marks the four checks with real bodies live and the other two as stubs', () => {
     expect(liveInvariants().map((x) => x.id)).toEqual([
       'hatch-alignment',
       'spine-connectivity',
       'spawn-inside',
+      'room-lit',
     ])
     expect(stubInvariants().map((x) => x.id)).toEqual([
       'seams-watertight',
       'collision-match',
-      'room-lit',
     ])
   })
 
@@ -465,6 +461,72 @@ describe('live checks on synthetic mini-specs (not fixture-shaped)', () => {
   })
 })
 
+/* ---------- room-lit (live at M2-T7) -------------------------------- */
+
+describe('room-lit live check (PRD §8 bullet 6, live at M2-T7)', () => {
+  it('passes on all four fixtures: every module instance carries a fixture', () => {
+    for (const fixture of SHIP_FIXTURES) {
+      const result = checkRoomLit(fixture.spec)
+      expect(result.status).toBe('pass')
+      expect(result.detail).toMatch(/no spec-dark rooms/)
+      expect(result.detail).toContain('authored kit (M2-T7)')
+    }
+  })
+
+  it('counts instances as spec refs plus the implicit per-deck shaft band', () => {
+    const tally = roomLightTally(PATROL_SPEC)
+    const refs = PATROL_SPEC.decks.reduce((n, deck) => n + deck.modules.length, 0)
+    expect(tally.roomInstances).toBe(refs)
+    expect(tally.bands).toBe(PATROL_SPEC.decks.length)
+    // The shaft bands carry their own panel lights, so the total exceeds the refs.
+    expect(tally.fixtures).toBeGreaterThan(tally.roomInstances)
+    expect(checkRoomLit(PATROL_SPEC).detail).toContain(`${refs} room instances`)
+  })
+
+  it('fails a spec whose module type the authored kit does not know', () => {
+    const unknown: ShipSpec = {
+      ...CANONICAL_THREE,
+      decks: [
+        CANONICAL_THREE.decks[0],
+        {
+          ...CANONICAL_THREE.decks[1],
+          modules: [{ moduleId: 'cargo', rotation: 0, offset: [0, 0, 0] }],
+        },
+        CANONICAL_THREE.decks[2],
+      ],
+    }
+    const result = checkRoomLit(unknown)
+    expect(result.status).toBe('fail')
+    expect(result.detail).toMatch(/module "cargo" is not in the kit/)
+  })
+
+  it('fails a spec with no module instances at all', () => {
+    const empty: ShipSpec = {
+      ...CANONICAL_THREE,
+      decks: [{ ...CANONICAL_THREE.decks[0], modules: [] }],
+    }
+    const result = checkRoomLit(empty)
+    expect(result.status).toBe('fail')
+    expect(result.detail).toMatch(/no module instances/)
+  })
+
+  it('fails a dark module and a dark shaft band (kit injected)', () => {
+    const dark = (id: string): KitManifest => ({
+      modules: AUTHORED_KIT.modules.map((module) =>
+        module.id === id ? { ...module, lightSockets: [] } : module,
+      ),
+    })
+    expect(roomLitProblems(CANONICAL_THREE, dark('galley')).join('; ')).toMatch(
+      /module "galley" has no light socket/,
+    )
+    expect(roomLitProblems(CANONICAL_THREE, dark('spine')).join('; ')).toMatch(
+      /shaft band \("spine"\) has no light socket/,
+    )
+    // The canonical kit lights the same spec cleanly — the check is not tautological.
+    expect(roomLitProblems(CANONICAL_THREE, AUTHORED_KIT)).toEqual([])
+  })
+})
+
 /* ---------- harness over the fixtures -------------------------------- */
 
 describe('invariant harness', () => {
@@ -481,14 +543,14 @@ describe('invariant harness', () => {
     }
   })
 
-  it('real ships: seams/collision/lit deferred; hatch+spine+spawn pass', () => {
+  it('real ships: seams/collision deferred; hatch+spine+spawn+lit pass', () => {
     for (const fixture of expectValidFixtures()) {
       const runs = runInvariantHarness(fixture)
-      expect(runs.map((r) => r.status)).toEqual([...DEFERRED_ROW])
+      expect(runs.map((r) => r.status)).toEqual([...REAL_SHIP_ROW])
     }
   })
 
-  it('stress rig: hatch/spine/spawn fail, remaining targets deferred', () => {
+  it('stress rig: hatch/spine/spawn fail; seams/collision deferred, lit passes', () => {
     const runs = runInvariantHarness(getShipFixture('stress'))
     expect(runs.map((r) => r.status)).toEqual([
       'deferred', // seams-watertight — the 10 mm open seam is M3-T2's assembled check
@@ -496,7 +558,7 @@ describe('invariant harness', () => {
       'fail', // spine-connectivity — live spec-level run continuity
       'deferred',
       'fail', // spawn-inside — no crew deck at index 1
-      'deferred',
+      'pass', // room-lit — live at M2-T7; the rig's defects are geometry, not lighting
     ])
   })
 
@@ -504,7 +566,6 @@ describe('invariant harness', () => {
     const owners: Record<string, string> = {
       'seams-watertight': 'M3-T2',
       'collision-match': 'M3-T3',
-      'room-lit': 'M2-T7',
     }
     for (const [invariantId, owner] of Object.entries(owners)) {
       for (const fixture of SHIP_FIXTURES) {

@@ -10,6 +10,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:slots": "node scripts/check-material-slots.ts",
+    "check:kit": "vitest run src/kit/harness",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

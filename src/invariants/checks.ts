@@ -39,7 +39,15 @@
  *    inside the deck, not intersecting hulls) needs collision geometry and
  *    is M3-T6's.
  *
- * All three are wired into the harness via LIVE_CHECKS; a stub invariant
+ *  - checkRoomLit            (§8 bullet 6, 'room-lit', LIVE at M2-T7): every
+ *    module INSTANCE in the spec carries ≥1 light fixture, read from the
+ *    AUTHORED kit's light sockets (src/kit/modules/) — light sockets are M2
+ *    data, so the fixture-time CONTRACT_KIT (which predates them, and whose
+ *    lightSockets are deliberately empty) cannot answer this. Instances are
+ *    the spec's module refs PLUS the implicit per-deck spine band the
+ *    assembler synthesizes (M2-T6), so a dark shaft counts as a dark room.
+ *
+ * All four are wired into the harness via LIVE_CHECKS; a stub invariant
  * has no entry here, which is what makes the harness report it `deferred`.
  */
 
@@ -52,8 +60,9 @@ import {
   moduleSeatProblems,
 } from './specAnalysis'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
-import type { ShipSpec } from '../types'
+import type { KitManifest, ShipSpec } from '../types'
 import { CONTRACT_KIT, doorTallies, hatchAlignmentProblems } from '../validation'
+import { AUTHORED_KIT, AUTHORED_MODULES } from '../kit/modules/registry'
 
 /**
  * §8 bullet 3 live check. Fails when the spine run is broken at any deck
@@ -187,6 +196,117 @@ export const checkHatchAlignment: InvariantCheck = (spec: ShipSpec) => {
 }
 
 /**
+ * Id of the vertical trunk module — the authored module flagged `shaft` (M2-T6
+ * `spine`), which the assembler instantiates once per deck. Sourced from the
+ * authored registry, never hard-coded: the band's identity is M2-T6's data.
+ */
+const SHAFT_BAND_ID =
+  AUTHORED_MODULES.find((module) => module.shaft === true)?.manifest.id ?? 'spine'
+
+/**
+ * §8 bullet 6 rule: every module INSTANCE in the spec carries ≥1 light fixture
+ * — no legally-dark room. Instances are the spec's module refs PLUS the implicit
+ * per-deck spine band (M2-T6: the assembler synthesizes one band per deck, so a
+ * dark shaft is a dark room), and the fixtures come from the AUTHORED kit's
+ * light sockets (M2-T7 — light sockets are M2 data).
+ *
+ * Fails on: a ref whose module type is not in the kit (its fixtures are unknown
+ * — the room is unaccounted for), a ref'd module with zero light sockets, the
+ * shaft band with zero light sockets, and a spec with no module instances at all.
+ */
+export function roomLitProblems(
+  spec: ShipSpec,
+  kit: KitManifest = AUTHORED_KIT,
+): string[] {
+  const problems: string[] = []
+  const { roomInstances, bands } = roomLightTally(spec, kit)
+
+  if (roomInstances === 0) {
+    problems.push('spec has no module instances — there is no room to light')
+    return problems
+  }
+  if (bands === 0) {
+    problems.push('the spine run has no shaft band — the trunk between decks is unlit')
+  }
+
+  spec.decks.forEach((deck, index) => {
+    for (const ref of deck.modules) {
+      const entry = kit.modules.find((module) => module.id === ref.moduleId)
+      if (entry === undefined) {
+        problems.push(
+          `deck ${index} (${deck.id}): module "${ref.moduleId}" is not in the kit — ` +
+            `its light fixtures are unknown, so the room cannot be proven lit`,
+        )
+        continue
+      }
+      if (entry.lightSockets.length === 0) {
+        problems.push(
+          `deck ${index} (${deck.id}): module "${ref.moduleId}" has no light socket — ` +
+            `a legally-dark room in the spec`,
+        )
+      }
+    }
+  })
+
+  const band = kit.modules.find((module) => module.id === SHAFT_BAND_ID)
+  if (band !== undefined && band.lightSockets.length === 0) {
+    problems.push(
+      `the shaft band ("${SHAFT_BAND_ID}") has no light socket — every deck's trunk is dark`,
+    )
+  }
+
+  return problems
+}
+
+/** Instance + fixture tallies for the room-lit check's report line. */
+export function roomLightTally(
+  spec: ShipSpec,
+  kit: KitManifest = AUTHORED_KIT,
+): { roomInstances: number; bandInstances: number; bands: number; fixtures: number } {
+  const fixturesOf = (moduleId: string): number =>
+    kit.modules.find((module) => module.id === moduleId)?.lightSockets.length ?? 0
+
+  let roomInstances = 0
+  let fixtures = 0
+  for (const deck of spec.decks) {
+    for (const ref of deck.modules) {
+      roomInstances += 1
+      fixtures += fixturesOf(ref.moduleId)
+    }
+  }
+
+  // One implicit shaft band per deck (M2-T6); a spec with no decks has none.
+  const bands = spec.decks.length
+  return {
+    roomInstances,
+    bandInstances: bands,
+    bands,
+    fixtures: fixtures + bands * fixturesOf(SHAFT_BAND_ID),
+  }
+}
+
+/**
+ * §8 bullet 6 live check (LIVE at M2-T7). "Every module instance has ≥ 1 light
+ * fixture (no legally-dark room in the spec)" — measured over the AUTHORED kit,
+ * which is the first kit that carries light sockets at all.
+ */
+export const checkRoomLit: InvariantCheck = (spec: ShipSpec) => {
+  const problems = roomLitProblems(spec)
+  if (problems.length > 0) {
+    return { status: 'fail', detail: problems.join('; ') }
+  }
+  const tally = roomLightTally(spec)
+  return {
+    status: 'pass',
+    detail:
+      `every module instance carries ≥ 1 light fixture: ${tally.roomInstances} room instance` +
+      `${tally.roomInstances === 1 ? '' : 's'} + ${tally.bands} shaft band` +
+      `${tally.bands === 1 ? '' : 's'} resolve to ${tally.fixtures} practical light sockets ` +
+      `in the authored kit (M2-T7) — no spec-dark rooms`,
+  }
+}
+
+/**
  * The live checks by invariant id. A stub invariant deliberately has NO
  * entry here; the harness reports stubs as `deferred` with their owner.
  * Live ids must equal liveInvariants() ids — pinned by invariants.test.ts.
@@ -195,4 +315,5 @@ export const LIVE_CHECKS: Partial<Record<InvariantId, InvariantCheck>> = {
   'hatch-alignment': checkHatchAlignment,
   'spine-connectivity': checkSpineConnectivity,
   'spawn-inside': checkSpawnInsideSpec,
+  'room-lit': checkRoomLit,
 }

@@ -22,7 +22,7 @@
  */
 
 import { MATERIAL_SLOTS, assertMaterialSlotsComplete } from '../types/materials.ts'
-import type { MaterialSlots } from '../types/materials.ts'
+import type { MaterialSlot, MaterialSlots } from '../types/materials.ts'
 
 /**
  * Interim per-slot payload until M4-T1 lands the real PBR sets. A slot names
@@ -126,6 +126,17 @@ export function themesProblems(themes: readonly unknown[]): string[] {
   }
 
   return problems
+}
+
+/**
+ * True when a theme assigns a usable payload to `slot` — the "unassigned slot"
+ * rule as a query, for gates that check one slot at a time (the M2-T7 kit
+ * harness asks this per slot a module's geometry draws). Delegates to the same
+ * payload rule as `themeProblems`; never re-derived.
+ */
+export function themeAssignsSlot(theme: MaterialTheme, slot: MaterialSlot): boolean {
+  const slots = theme.slots as Record<string, unknown>
+  return isFilledSlot(slots[slot])
 }
 
 /**

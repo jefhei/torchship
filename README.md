@@ -15,7 +15,18 @@ npm install
 npm run dev          # Vite dev server
 npm run verify       # the machine gate: lint + format:check + typecheck + test + build
 npm run check:slots  # material-slot completeness gate (also runs first in `npm run build`)
+npm run check:kit    # kit harness (M2 machine gate) — see "Kit harness" below
 ```
+
+## Kit harness
+
+`src/kit/harness/` is the M2 machine gate as executable data. `runKitHarness()` reports, per
+authored module: manifest/authoring integrity, the contract diff against the fixture-time kit
+(door sockets with per-axis millimetre residuals), every §4 slot the geometry draws resolving in
+the ship's theme, and — walking the module's own render tree, pinned against a real react-dom
+render of the same components — one mesh per part with the geometry, slot and transform the part
+list describes. `npm run check:kit` runs it; `assertKitHarnessClean()` is the throwing form.
+`StandaloneModuleScene` renders one module alone (the harness's composition surface).
 
 CI (`.github/workflows/ci.yml`) runs the machine gate on every push to `main` and every pull
 request — lint/format/typecheck/material-slots, then vitest, then the Vite build. An unassigned

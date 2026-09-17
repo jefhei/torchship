@@ -17,14 +17,15 @@
  *   bullet 4 (collision-match)   → M3-T3 per-deck hull builder
  *   bullet 5 (spawn-inside)      → M3-T6 spawn selection (spec facet live
  *                                  at M0-T6; containment half deferred)
- *   bullet 6 (room-lit)          → M2-T7 kit test harness (lightSockets)
+ *   bullet 6 (room-lit)          → M2-T7 kit test harness — LIVE at M2-T7
+ *                                  (authored kit light sockets, see checks.ts)
  *
  * A check is either:
- *  - `live` — the M0-T6 harness runs a real spec-level check today
- *    (see src/invariants/checks.ts for the implementation), or
+ *  - `live` — the harness runs a real check today (see src/invariants/checks.ts
+ *    for the implementation), or
  *  - `stub` — a declared TARGET: the fixture data available at M0 does not
- *    carry what the check needs (assembled geometry, kit door sockets,
- *    collision hulls, light sockets), so the harness reports it `deferred`
+ *    carry what the check needs (assembled geometry for bullet 1, collision
+ *    hulls for bullet 4), so the harness reports it `deferred`
  *    with its owner and required input. The owner milestone replaces the
  *    stub with a real check; the registry entry is the contract it slots
  *    into. BUILD_PLAN M0 gate: "invariant test harness runs (may fail —
@@ -155,9 +156,9 @@ export const AUTO_INVARIANTS: readonly AutoInvariant[] = [
     requirement:
       'Every module instance has \u2265 1 light fixture (no legally-dark room in the spec).',
     limit: { value: 1, unit: 'count', relation: '>=' },
-    status: 'stub',
+    status: 'live',
     owner: 'M2-T7',
-    needs: 'kit-manifest lightSockets per module (authored at M2)',
+    note: 'Live at M2-T7 (checks.ts checkRoomLit): light sockets are M2 authorship data (the fixture-time CONTRACT_KIT predates them and carries none), so the check reads the AUTHORED kit (src/kit/modules/registry.ts) and counts fixtures per module INSTANCE — every spec ref plus the implicit per-deck shaft band the assembler synthesizes (M2-T6). Fails on a ref to a module the kit does not know (its fixtures are unknown), a ref\u2019d module with zero light sockets, a dark shaft band, or a spec with no instances. The kit harness (src/kit/harness/) is what proves the sockets themselves are real: 35 sockets across the six authored modules, each anchored on audited geometry, gated by the M2 machine gate.',
   },
 ]
 
