@@ -40,7 +40,12 @@ import { SPINE_HALF_M } from '../fixtures/layout'
 
 /** Meters → millimeters, rounded to 0.001 mm (float noise floor). */
 export function toMm(meters: number): number {
-  return Math.round((meters / MM) * 1000) / 1000
+  const mm = Math.round((meters / MM) * 1000) / 1000
+  // Normalize −0 → 0: a deviation that rounds to zero from below carries a
+  // signed zero, and Object.is-strict matchers (and the deviation rows M3-T2
+  // reports) treat −0 and 0 as different values. Same rule as the other
+  // grid-math converters (src/types/geometry.ts rotY, units.ts deckFloorYFor).
+  return mm === 0 ? 0 : mm
 }
 
 /** A door socket of a placed module, in world meters. */
