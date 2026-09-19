@@ -40,6 +40,17 @@ the theme registry and its completeness gate in `src/materials/`.
 > `git mv ci/github-actions-ci.yml .github/workflows/ci.yml` from a workflow-scoped credential.
 > Until then CI does not run and `npm run verify` is the gate.
 
+## Seams (M3-T2)
+
+Every joint's mating geometry is generated from the door sockets themselves — never freehand
+(`src/assembler/seams.ts`). A **sleeve** (the contact annulus between two mating wall faces,
+extruded across the seam) seals each join; a **plug** (cut from the socket's opening, lapped onto
+the wall and measured against the wall it sits in) closes every blanked socket a module does not
+already hatch. The pass measures itself — gap against the 2 mm watertight cap, coverage of the
+annulus, bite past both wall planes, and a clear pass-through — and that measurement is the PRD §8
+bullet 1 `[auto]` invariant (`seams-watertight`, live at M3-T2 in the M0-T6 harness via
+`checkSeamsWatertight`). `seamTally()` / `seamsWatertightProblems()` are the report surface.
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every

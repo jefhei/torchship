@@ -7,7 +7,9 @@
  * applies (imported from the M0-T2 seam spike's SEAM_TOLERANCES — measured
  * constants, never re-derived), and the milestone that owns the real check:
  *
- *   bullet 1 (seams-watertight)  → M3-T2 assembler geometry test
+ *   bullet 1 (seams-watertight)  → M3-T2 assembler geometry test — LIVE at
+ *                                  M3-T2 (mating geometry generated from the
+ *                                  sockets + measured, see checks.ts)
  *   bullet 2 (hatch-alignment)   → M1-T3 spec validator — LIVE at M1-T3
  *                                  (socket-resolved, see checks.ts)
  *   bullet 3 (spine-connectivity)→ M1-T3 resolver refines the M0-T6
@@ -24,12 +26,11 @@
  *  - `live` — the harness runs a real check today (see src/invariants/checks.ts
  *    for the implementation), or
  *  - `stub` — a declared TARGET: the fixture data available at M0 does not
- *    carry what the check needs (assembled geometry for bullet 1, collision
- *    hulls for bullet 4), so the harness reports it `deferred`
- *    with its owner and required input. The owner milestone replaces the
- *    stub with a real check; the registry entry is the contract it slots
- *    into. BUILD_PLAN M0 gate: "invariant test harness runs (may fail —
- *    that's fine, they're targets)".
+ *    carry what the check needs (collision hulls for bullet 4), so the harness
+ *    reports it `deferred` with its owner and required input. The owner
+ *    milestone replaces the stub with a real check; the registry entry is the
+ *    contract it slots into. BUILD_PLAN M0 gate: "invariant test harness runs
+ *    (may fail — that's fine, they're targets)".
  */
 
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
@@ -97,11 +98,9 @@ export const AUTO_INVARIANTS: readonly AutoInvariant[] = [
       unit: 'mm',
       relation: '<',
     },
-    status: 'stub',
+    status: 'live',
     owner: 'M3-T2',
-    needs:
-      'assembler geometry (mating faces resolved at every door-socket join and bulkhead meet)',
-    note: 'M0-T2 proved socket-solved joins measure 0.000 mm — the join math is never the error source; this invariant guards the ASSEMBLER output, which does not exist before M3.',
+    note: 'Live at M3-T2 (checks.ts checkSeamsWatertight): the assembler GENERATES the mating geometry from the sockets and this check measures it (src/assembler/seams.ts) — every join sleeve\u2019s along-normal gap against the < 2 mm cap, its coverage of the contact annulus between the two wall faces, its bite past both planes, that it never intrudes into the pass-through, and that every blanked socket nothing else seals is plugged through the wall it sits in. Also the "bulkhead meet" half: module faces that engage with overlapping rectangles and no door socket between them must be gap-free. M0-T2 proved socket-solved joins measure 0.000 mm — the join math is never the error source; this guards the ASSEMBLER output.',
   },
   {
     id: 'hatch-alignment',

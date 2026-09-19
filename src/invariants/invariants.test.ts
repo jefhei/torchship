@@ -11,13 +11,13 @@
  *    the stress rig's declared defect magnitudes (10 / 25 / 200 mm) and
  *    the 50 mm off-grid deck floor;
  *  - the live checks PASS on the three real ships and FAIL the stress rig
- *    at the declared decks: hatch-alignment (socket-resolved, LIVE at
- *    M1-T3), spine-connectivity and spawn-inside spec facet (live since
- *    M0-T6), room-lit (live at M2-T7 over the authored kit's light sockets);
- *  - stub invariants (seams-watertight, collision-match) are declared
- *    targets: the harness reports them 'deferred' with their owning
- *    milestone — the input they need (assembled geometry, collision hulls)
- *    does not exist until M3-T2 / M3-T3 land;
+ *    at the declared decks: seams-watertight (assembled mating geometry, LIVE
+ *    at M3-T2), hatch-alignment (socket-resolved, LIVE at M1-T3),
+ *    spine-connectivity and spawn-inside spec facet (live since M0-T6),
+ *    room-lit (live at M2-T7 over the authored kit's light sockets);
+ *  - the remaining stub invariant (collision-match) is a declared target: the
+ *    harness reports it 'deferred' with its owning milestone — the input it
+ *    needs (collision hulls) does not exist until M3-T3 lands;
  *  - the harness runs over all four fixtures without throwing and returns
  *    attributable runs (fixture × invariant).
  *
@@ -32,6 +32,7 @@ import {
   LIVE_CHECKS,
   checkHatchAlignment,
   checkRoomLit,
+  checkSeamsWatertight,
   checkSpineConnectivity,
   checkSpawnInsideSpec,
   deckGridErrorMm,
@@ -96,7 +97,7 @@ function miniSpec(roomPerDeck: RoomModuleId[]): ShipSpec {
 const CANONICAL_THREE = miniSpec(['head', 'galley', 'engineering'])
 
 /** Expected run-status rows: [seams, hatch, spine, collision, spawn, lit]. */
-const REAL_SHIP_ROW = ['deferred', 'pass', 'pass', 'deferred', 'pass', 'pass'] as const
+const REAL_SHIP_ROW = ['pass', 'pass', 'pass', 'deferred', 'pass', 'pass'] as const
 
 /* ---------- registry ----------------------------------------------- */
 
@@ -133,17 +134,15 @@ describe('invariant registry (PRD §8 [auto])', () => {
     expect(SEAM_TOLERANCES.hatchAlignMm).toBe(5)
   })
 
-  it('marks the four checks with real bodies live and the other two as stubs', () => {
+  it('marks the five checks with real bodies live and collision-match as a stub', () => {
     expect(liveInvariants().map((x) => x.id)).toEqual([
+      'seams-watertight',
       'hatch-alignment',
       'spine-connectivity',
       'spawn-inside',
       'room-lit',
     ])
-    expect(stubInvariants().map((x) => x.id)).toEqual([
-      'seams-watertight',
-      'collision-match',
-    ])
+    expect(stubInvariants().map((x) => x.id)).toEqual(['collision-match'])
   })
 
   it('assigns each invariant the milestone that owns its real check', () => {
@@ -461,6 +460,85 @@ describe('live checks on synthetic mini-specs (not fixture-shaped)', () => {
   })
 })
 
+/* ---------- seams-watertight (live at M3-T2) ------------------------- */
+
+describe('seams-watertight live check (PRD §8 bullet 1, live at M3-T2)', () => {
+  it('passes on the three real ships with the measured seam tally', () => {
+    for (const fixture of expectValidFixtures()) {
+      const result = checkSeamsWatertight(fixture.spec)
+      expect(result.status).toBe('pass')
+      expect(result.detail).toMatch(/sleeved from its sockets and measured watertight/)
+      expect(result.detail).toMatch(/max gap 0\.0 mm \(< 2 mm cap\)/)
+      expect(result.detail).toMatch(/min bite past the mating wall planes 30\.0 mm/)
+      expect(result.detail).toMatch(/plugged from the socket/)
+    }
+    // Patrol: 5 rooms → 5 joins; 19 blanks (4 room side doors sealed by their
+    // own hatch, 15 shaft faces plugged from the socket).
+    const patrol = checkSeamsWatertight(PATROL_SPEC)
+    expect(patrol.detail).toContain('5 door-socket joins')
+    expect(patrol.detail).toMatch(
+      /of 19 blanked sockets, 4 sealed by their own module's hatch/,
+    )
+    expect(patrol.detail).toMatch(/15 plugged from the socket/)
+  })
+
+  it('fails the stress rig on the 10 mm open seam (rig-1), naming the sleeve', () => {
+    const result = checkSeamsWatertight(STRESS_SPEC)
+    expect(result.status).toBe('fail')
+    expect(result.detail).toContain('rig-1')
+    expect(result.detail).toMatch(
+      /open seam of 10\.0 mm between the mating wall faces of spine band "\+z" ↔ head#0 "spine-door"/,
+    )
+    expect(result.detail).toMatch(/the watertight cap is < 2 mm/)
+    // The rig's other defects are alignment/run problems, not open seams.
+    expect(result.detail).not.toContain('rig-2')
+    expect(result.detail).not.toContain('rig-4')
+  })
+
+  it('fails a synthetic ship whose room is pushed 10 mm proud of the spine', () => {
+    const pushed: ShipSpec = {
+      ...CANONICAL_THREE,
+      decks: [
+        CANONICAL_THREE.decks[0],
+        {
+          ...CANONICAL_THREE.decks[1],
+          modules: [
+            {
+              moduleId: 'galley',
+              rotation: 0,
+              offset: [0, 0, spineAttachOffsetZ('galley') + 10e-3],
+            },
+          ],
+        },
+        CANONICAL_THREE.decks[2],
+      ],
+    }
+    const result = checkSeamsWatertight(pushed)
+    expect(result.status).toBe('fail')
+    expect(result.detail).toMatch(/open seam of 10\.0 mm/)
+    // …while the canonical twin is clean: the check is not tautological.
+    expect(checkSeamsWatertight(CANONICAL_THREE).status).toBe('pass')
+  })
+
+  it('fails a ship whose module type the kit cannot assemble', () => {
+    const unknown: ShipSpec = {
+      ...CANONICAL_THREE,
+      decks: [
+        CANONICAL_THREE.decks[0],
+        {
+          ...CANONICAL_THREE.decks[1],
+          modules: [{ moduleId: 'cargo', rotation: 0, offset: [0, 0, 0] }],
+        },
+        CANONICAL_THREE.decks[2],
+      ],
+    }
+    const result = checkSeamsWatertight(unknown)
+    expect(result.status).toBe('fail')
+    expect(result.detail).toMatch(/cannot be assembled/)
+    expect(result.detail).toMatch(/references unknown kit module "cargo"/)
+  })
+})
+
 /* ---------- room-lit (live at M2-T7) -------------------------------- */
 
 describe('room-lit live check (PRD §8 bullet 6, live at M2-T7)', () => {
@@ -550,10 +628,10 @@ describe('invariant harness', () => {
     }
   })
 
-  it('stress rig: hatch/spine/spawn fail; seams/collision deferred, lit passes', () => {
+  it('stress rig: hatch/spine/spawn/seams fail; collision deferred, lit passes', () => {
     const runs = runInvariantHarness(getShipFixture('stress'))
     expect(runs.map((r) => r.status)).toEqual([
-      'deferred', // seams-watertight — the 10 mm open seam is M3-T2's assembled check
+      'fail', // seams-watertight — live at M3-T2: rig-1's 10 mm open seam
       'fail', // hatch-alignment — socket-resolved (M1-T3): rig-1/2/3/4 all fail
       'fail', // spine-connectivity — live spec-level run continuity
       'deferred',
@@ -564,7 +642,6 @@ describe('invariant harness', () => {
 
   it('deferred runs name the owning milestone and the missing input', () => {
     const owners: Record<string, string> = {
-      'seams-watertight': 'M3-T2',
       'collision-match': 'M3-T3',
     }
     for (const [invariantId, owner] of Object.entries(owners)) {

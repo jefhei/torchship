@@ -2,10 +2,19 @@
  * M0-T6 — live spec-level implementations of PRD §8 [auto] invariants.
  *
  * The fixture data (ShipSpec + the layout contract + the M1-T3 socket
- * resolver over the fixture-time CONTRACT_KIT) supports REAL checks for
- * three bullets today; the other three are declared targets in registry.ts
- * until their owner milestone supplies the missing input (assembled
- * geometry, collision hulls, light sockets):
+ * resolver over the fixture-time CONTRACT_KIT + the M2-T7 authored kit + the
+ * M3-T1/T2 assembler) supports REAL checks for five bullets today; collision
+ * (bullet 4) is a declared target in registry.ts until M3-T3 supplies the
+ * missing input:
+ *
+ *  - checkSeamsWatertight    (§8 bullet 1, 'seams-watertight', LIVE at
+ *    M3-T2): the assembler generates the mating/closing geometry from the
+ *    sockets (src/assembler/seams.ts) and this check reads the measured
+ *    verdict — every join's sleeve gap against the < 2 mm cap, its coverage
+ *    of the contact annulus, its bite past both wall planes, that it stays out
+ *    of the pass-through, that every blanked socket nothing else seals is
+ *    plugged through its wall, and that engaging bulkhead meets without a
+ *    socket between them are gap-free.
  *
  *  - checkSpineConnectivity  (§8 bullet 3, 'spine-connectivity'): the spine
  *    run is continuous when every deck seats a module flush on the shaft
@@ -47,8 +56,8 @@
  *    the spec's module refs PLUS the implicit per-deck spine band the
  *    assembler synthesizes (M2-T6), so a dark shaft counts as a dark room.
  *
- * All four are wired into the harness via LIVE_CHECKS; a stub invariant
- * has no entry here, which is what makes the harness report it `deferred`.
+ * All five are wired into the harness via LIVE_CHECKS; a stub invariant has no
+ * entry here, which is what makes the harness report it `deferred`.
  */
 
 import type { InvariantCheck, InvariantId } from './registry'
@@ -59,10 +68,13 @@ import {
   findDeckHosting,
   moduleSeatProblems,
 } from './specAnalysis'
+import { MM } from '../types'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import type { KitManifest, ShipSpec } from '../types'
 import { CONTRACT_KIT, doorTallies, hatchAlignmentProblems } from '../validation'
 import { AUTHORED_KIT, AUTHORED_MODULES } from '../kit/modules/registry'
+import { assembleShip, seamTally, seamsWatertightProblems } from '../assembler'
+import type { ShipAssembly } from '../assembler'
 
 /**
  * §8 bullet 3 live check. Fails when the spine run is broken at any deck
@@ -204,6 +216,53 @@ const SHAFT_BAND_ID =
   AUTHORED_MODULES.find((module) => module.shaft === true)?.manifest.id ?? 'spine'
 
 /**
+ * §8 bullet 1 live check (LIVE at M3-T2). "For every door-socket join and
+ * bulkhead meet, the gap is < 2 mm" — measured on the ASSEMBLED geometry: the
+ * assembler generates the mating/closing geometry from the sockets
+ * (src/assembler/seams.ts) and this check reads its verdicts — the sleeve gap
+ * at every join, its coverage of the contact annulus, its bite past both wall
+ * planes, that it never enters the pass-through, that every blanked socket
+ * nothing else seals is plugged through its wall, and that module faces which
+ * engage without a door socket between them are gap-free.
+ *
+ * It assembles the spec itself (the harness hands checks a spec, not a ship),
+ * with the validator gate off so a REJECTED rig still reports its assembled
+ * seam verdict instead of throwing — the validator stays the accept/reject
+ * gate for "would this ship walk", this check is the geometry's own view.
+ */
+export const checkSeamsWatertight: InvariantCheck = (spec: ShipSpec) => {
+  let ship: ShipAssembly
+  try {
+    ship = assembleShip(spec, { requireValidSpec: false })
+  } catch (error) {
+    return {
+      status: 'fail',
+      detail:
+        `the ship cannot be assembled, so its seams cannot be measured: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
+
+  const problems = seamsWatertightProblems(ship)
+  if (problems.length > 0) {
+    return { status: 'fail', detail: problems.join('; ') }
+  }
+
+  const tally = seamTally(ship)
+  return {
+    status: 'pass',
+    detail:
+      `every one of the ${tally.joins} door-socket join${tally.joins === 1 ? '' : 's'} is ` +
+      `sleeved from its sockets and measured watertight: max gap ${tally.maxGapMm.toFixed(1)} mm ` +
+      `(< ${SEAM_TOLERANCES.watertightGapMm} mm cap), min bite past the mating wall planes ` +
+      `${(tally.minBiteM / MM).toFixed(1)} mm, no sleeve entering a pass-through and no ` +
+      `engaging bulkhead meet left unsealed; of ${tally.blanks} blanked socket` +
+      `${tally.blanks === 1 ? '' : 's'}, ${tally.hatchSealed} sealed by their own module's ` +
+      `hatch and ${tally.plugged} plugged from the socket (${tally.parts} generated seam parts)`,
+  }
+}
+
+/**
  * §8 bullet 6 rule: every module INSTANCE in the spec carries ≥1 light fixture
  * — no legally-dark room. Instances are the spec's module refs PLUS the implicit
  * per-deck spine band (M2-T6: the assembler synthesizes one band per deck, so a
@@ -312,6 +371,7 @@ export const checkRoomLit: InvariantCheck = (spec: ShipSpec) => {
  * Live ids must equal liveInvariants() ids — pinned by invariants.test.ts.
  */
 export const LIVE_CHECKS: Partial<Record<InvariantId, InvariantCheck>> = {
+  'seams-watertight': checkSeamsWatertight,
   'hatch-alignment': checkHatchAlignment,
   'spine-connectivity': checkSpineConnectivity,
   'spawn-inside': checkSpawnInsideSpec,

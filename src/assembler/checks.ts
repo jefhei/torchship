@@ -30,7 +30,13 @@
  *  - every room lands on the spine (its `spine-door` is in a spine join), and
  *    every join it forms is within the M0-T2 hatch cap — a misaligned join is
  *    reported, not repaired (the validator is the accept/reject gate; this is
- *    the assembled-ship view M3-T2 needs).
+ *    the assembled-ship view M3-T2 needs);
+ *  - the seam pass (M3-T2) is complete and watertight: exactly one sleeve per
+ *    join, generated from that join's sockets, with the gap it measured equal
+ *    to the join's own along-normal channel; exactly one plan per blanked
+ *    socket, and every socket that nothing else seals is plugged (a blanked
+ *    doorway left open is a hole in the hull); and every seal's own measured
+ *    problems (coverage, bite, passage, plug depth) are surfaced verbatim.
  */
 
 import type { Aabb3, DeckNode, MaterialSlot } from '../types'
@@ -40,10 +46,11 @@ import { moduleBounds, moduleCollisionBoxes } from '../kit/modules/types'
 import { placePart } from '../kit/modules/placement'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import { DEFAULT_MIN_INSTANCES, mouldOf, placementFor } from './batches'
-import { spineJoinOf } from './joins'
+import { joinLabel, spineJoinOf } from './joins'
 import { boxContains, isWellFormedBox, transformAabb, worldOriginOf } from './place'
+import { placedPartsOf } from './assemble'
 import { spineRunProblems } from './spineRun'
-import type { DeckAssembly, PlacedModule, ShipAssembly } from './types'
+import type { DeckAssembly, PlacedModule, SeamPlan, ShipAssembly } from './types'
 
 /** Deconstructed allowance constants — the M2 gate's two structural exemptions. */
 const SUBFLOOR_TOLERANCE_M = 0.2
@@ -65,9 +72,9 @@ function worldModuleBounds(owner: PlacedModule): Aabb3 {
   return transformAabb(moduleBounds(owner.module), owner.origin, owner.rotation)
 }
 
-/** Every part of one deck's placed modules (the assembler's part input). */
+/** Every part of one deck's geometry (module instances + generated seams). */
 function deckParts(assembly: DeckAssembly): number {
-  return assembly.modules.reduce((sum, owner) => sum + owner.parts.length, 0)
+  return placedPartsOf(assembly).length
 }
 
 /**
@@ -436,7 +443,61 @@ export function assemblyProblems(
     }
   }
 
-  // 9. The generated run tiles (the vertical half of §8 bullet 3).
+  // 9. The seam pass (M3-T2) — the assembled-geometry half of §8 bullets 1+2:
+  // one sleeve per join, generated FROM that join's sockets, and one plan per
+  // blanked socket, with every measured verdict (coverage, bite, passage, plug
+  // depth) surfaced verbatim. Per-deck, because a seam lives on its deck.
+  for (const assembly of ship.decks) {
+    const { deckId, deckIndex } = assembly
+    const where = `deck ${deckIndex} ("${deckId}")`
+
+    const sleevePlans = assembly.seams.filter((plan) => plan.kind !== 'blank')
+    if (sleevePlans.length !== assembly.joins.length) {
+      problems.push(
+        `${where}: the seam pass produced ${sleevePlans.length} sleeve plan(s) for ` +
+          `${assembly.joins.length} join(s) — every join needs its mating geometry`,
+      )
+    }
+    for (const join of assembly.joins) {
+      const plan: SeamPlan | undefined = assembly.seams.find(
+        (candidate) =>
+          candidate.doors.includes(join.a) && candidate.doors.includes(join.b),
+      )
+      if (plan === undefined) {
+        problems.push(
+          `${where}: the join ${joinLabel(join)} has no seam plan — no mating geometry ` +
+            `was generated for it`,
+        )
+        continue
+      }
+      if (plan.gapMm !== Math.abs(join.normalMm)) {
+        problems.push(
+          `${where}: seam "${plan.id}" measured a ${plan.gapMm} mm gap for ` +
+            `${joinLabel(join)}, whose own along-normal channel is ${Math.abs(join.normalMm)} mm`,
+        )
+      }
+      if (plan.required.length > 0 && plan.sealedBy !== 'sleeve') {
+        problems.push(
+          `${where}: seam "${plan.id}" must cover a ${plan.required.length}-band annulus ` +
+            `but generated no sleeve`,
+        )
+      }
+    }
+    const blankPlans = assembly.seams.filter((plan) => plan.kind === 'blank')
+    if (blankPlans.length !== assembly.blanks.length) {
+      problems.push(
+        `${where}: the seam pass produced ${blankPlans.length} blank plan(s) for ` +
+          `${assembly.blanks.length} blanked socket(s) — every blank must be closed`,
+      )
+    }
+    for (const plan of assembly.seams) {
+      for (const problem of plan.problems) {
+        problems.push(`${where} seam "${plan.id}": ${problem}`)
+      }
+    }
+  }
+
+  // 10. The generated run tiles (the vertical half of §8 bullet 3).
   problems.push(...spineRunProblems(spec))
 
   return problems

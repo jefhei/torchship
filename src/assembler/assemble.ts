@@ -20,11 +20,16 @@
  *             into merged per-slot `GeometryGroup`s and instanced `InstanceBatch`
  *             batches (batches.ts), with the deck's collision hull (the world
  *             boxes of every module's collision hint) and named interactives
- *             (doors + hatches).
+ *             (doors + hatches);
+ *  5. SEAL    the M3-T2 seam pass (seams.ts) generates the mating geometry for
+ *             every join and the closing geometry for every blanked socket
+ *             FROM the sockets themselves, measures it (gap / coverage / bite /
+ *             passage), and its parts join the same geometry partition.
  *
  * Nothing is freehand (BUILD_PLAN rule 8): module geometry comes from the M2
  * authored assemblies, placement from the shared transforms, hulls from the
- * modules' own collision hints, and joins from door sockets.
+ * modules' own collision hints, joins from door sockets, and the seals between
+ * them from those same sockets (M3-T2 — a seam is never drawn by hand).
  *
  * Interactives:
  *  - `kind: 'door'` — every door socket of every ROOM instance, at the socket
@@ -45,9 +50,8 @@
  */
 
 import { AUTHORED_MODULES } from '../kit/modules/registry'
-import { addTurns, placePoint } from '../kit/modules/placement'
+import { addTurns } from '../kit/modules/placement'
 import type { AuthoredModule } from '../kit/modules/types'
-import { MM } from '../types'
 import type {
   DeckNode,
   DeckSpec,
@@ -56,18 +60,20 @@ import type {
   ModuleRef,
   ModuleSource,
   ShipSpec,
-  Vec3,
 } from '../types'
-import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import { assertValidShipSpec, moduleDoors } from '../validation'
 import { DEFAULT_MIN_INSTANCES, partitionParts } from './batches'
 import { scanDeckSockets } from './joins'
 import { facingTurns, worldBoxesOf, worldOriginOf, worldPartsOf } from './place'
+import { selfSealingAssemblyOf, seamPlansForDeck } from './seams'
 import { bandRef, shaftModuleOf, spineRun } from './spineRun'
-import type { AssembleOptions, DeckAssembly, PlacedModule, ShipAssembly } from './types'
-
-/** Socket authoring budget (±0.5 mm), meters — the M0-T2 measured tolerance. */
-const SOCKET_EPS_M = SEAM_TOLERANCES.maxSocketAuthoringErrorMm * MM
+import type {
+  AssembleOptions,
+  DeckAssembly,
+  PlacedModule,
+  PlacedPart,
+  ShipAssembly,
+} from './types'
 
 /** The spec's module refs must resolve: throw naming the deck and the ref. */
 function moduleOf(
@@ -129,20 +135,14 @@ function placeModule(
   }
 }
 
-/** The world origin of a hatch assembly: its own module-local placement, placed. */
-function hatchOrigin(owner: PlacedModule, localPosition: Vec3): Vec3 {
-  return placePoint(localPosition, {
-    position: owner.origin,
-    rotation: owner.rotation,
-  })
-}
-
 /**
  * The deck's named interactives: one 'door' per room door socket (at the
  * socket center, yawed to its outward facing), one 'hatch' per hatch assembly
  * the module authored on a socket (at that socket center, at the hatch's own
- * yaw). A hatch that cannot be paired with a socket is skipped here and
- * reported by `assemblyProblems` — never emitted at an invented position.
+ * yaw). The pairing rule lives in seams.ts (`selfSealingAssemblyOf` — the
+ * socket IS the hatch's anchor, M2-T2); a hatch that cannot be paired with a
+ * socket is skipped here and reported by `assemblyProblems` — never emitted at
+ * an invented position.
  */
 export function interactivesOf(
   modules: readonly PlacedModule[],
@@ -161,28 +161,35 @@ export function interactivesOf(
         rotation: facingTurns(door.facing),
         source: owner.source,
       })
-    }
-    for (const assembly of owner.module.assemblies) {
-      if (assembly.fillsSocket !== true) continue
-      const origin = hatchOrigin(owner, assembly.placement.position ?? [0, 0, 0])
-      const socket = owner.doors.find(
-        (door) =>
-          Math.abs(door.center[0] - origin[0]) <= SOCKET_EPS_M &&
-          Math.abs(door.center[1] - origin[1]) <= SOCKET_EPS_M &&
-          Math.abs(door.center[2] - origin[2]) <= SOCKET_EPS_M,
-      )
-      if (socket === undefined) continue
+      const hatch = selfSealingAssemblyOf(owner, door)
+      if (hatch === undefined) continue
       interactives.push({
-        id: `${deckId}-${index}-${owner.source.moduleId}-hatch-${assembly.id}`,
+        id: `${deckId}-${index}-${owner.source.moduleId}-hatch-${hatch.id}`,
         kind: 'hatch',
-        position: socket.center,
-        rotation: addTurns(owner.rotation, assembly.placement.rotation ?? 0),
+        position: door.center,
+        rotation: addTurns(owner.rotation, hatch.placement.rotation ?? 0),
         source: owner.source,
       })
     }
   }
 
   return interactives
+}
+
+/**
+ * Every placed part of a deck's geometry: the module instances' kit parts in
+ * build order, then the seam pass's generated parts (M3-T2). This is the
+ * exact list `partitionParts` splits into merged groups and instanced batches,
+ * and the list the assembler gate counts — one source of truth, so a part can
+ * never be added to the deck without joining the partition.
+ */
+export function placedPartsOf(
+  assembly: Pick<DeckAssembly, 'modules' | 'seams'>,
+): PlacedPart[] {
+  return [
+    ...assembly.modules.flatMap((owner) => owner.parts),
+    ...assembly.seams.flatMap((plan) => plan.parts),
+  ]
 }
 
 /**
@@ -220,7 +227,8 @@ export function assembleDeck(
   const placed: PlacedModule[] = [...rooms, band]
 
   const scan = scanDeckSockets(placed)
-  const parts = placed.flatMap((owner) => owner.parts)
+  const seams = seamPlansForDeck(placed, scan, deckIndex, deck.id)
+  const parts = placedPartsOf({ modules: placed, seams })
   const { groups, batches } = partitionParts(parts, deckIndex, minInstances)
 
   const node: DeckNode = {
@@ -243,6 +251,7 @@ export function assembleDeck(
     band,
     joins: scan.joins,
     blanks: scan.blanks,
+    seams,
     groups,
     batches,
   }

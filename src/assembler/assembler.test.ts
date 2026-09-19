@@ -56,6 +56,7 @@ import {
   mouldOf,
   partitionParts,
   placementFor,
+  placedPartsOf,
   spineJoinOf,
   spineRun,
   spineRunProblems,
@@ -374,9 +375,19 @@ describe('merged geometry + instanced batches', () => {
     for (const fixture of SHIP_FIXTURES) {
       const ship = assembleShip(fixture.spec, { requireValidSpec: fixture.expectValid })
       for (const deck of ship.decks) {
-        const placed = deck.modules.flatMap((owner) => owner.parts)
-        expect(placed.length).toBe(
+        // Module geometry (the kit's own parts) plus the seam pass's generated
+        // parts: every one of them joins the partition exactly once.
+        const modulePartsCount = deck.modules.reduce(
+          (sum, owner) => sum + owner.parts.length,
+          0,
+        )
+        expect(modulePartsCount).toBe(
           expectedDeckParts(fixture.spec.decks[deck.deckIndex]),
+        )
+        const placed = placedPartsOf(deck)
+        expect(placed.length).toBe(
+          modulePartsCount +
+            deck.seams.reduce((sum, plan) => sum + plan.parts.length, 0),
         )
         const grouped = deck.groups.flatMap((plan) => plan.parts)
         const batched = deck.batches.flatMap((plan) => plan.parts)
@@ -432,7 +443,7 @@ describe('merged geometry + instanced batches', () => {
       })
       // A shape drawn once is merged, not instanced.
       const mouldCounts = new Map<string, number>()
-      for (const entry of deck.modules.flatMap((owner) => owner.parts)) {
+      for (const entry of placedPartsOf(deck)) {
         mouldCounts.set(entry.pieceId, (mouldCounts.get(entry.pieceId) ?? 0) + 1)
       }
       for (const plan of deck.batches) {
@@ -493,7 +504,7 @@ describe('merged geometry + instanced batches', () => {
     const strict = assembleShip(PATROL_SPEC, { minInstances: 6 })
     expect(assemblyProblems(strict, 6)).toEqual([])
     for (const deck of strict.decks) {
-      const placed = deck.modules.flatMap((owner) => owner.parts).length
+      const placed = placedPartsOf(deck).length
       const grouped = deck.groups.flatMap((plan) => plan.parts).length
       const batched = deck.batches.flatMap((plan) => plan.parts).length
       expect(grouped + batched).toBe(placed)
@@ -532,7 +543,7 @@ describe('merged geometry + instanced batches', () => {
     const deck = assembleShip(PATROL_SPEC, { minInstances: 3 })
     for (const assembly of deck.decks) {
       const { groups, batches } = partitionParts(
-        assembly.modules.flatMap((owner) => owner.parts),
+        placedPartsOf(assembly),
         assembly.deckIndex,
         3,
       )
@@ -703,6 +714,48 @@ describe('per-deck collision hull', () => {
       expect(roomBounds.min[2]).toBeCloseTo(0.7, 9)
       expect(roomBounds.min[1]).toBeCloseTo(deck.floorY - 0.2, 9)
     }
+  })
+})
+
+// ── the seam pass (M3-T2) ─────────────────────────────────────────────────
+
+describe('the seam pass rides the assembly (M3-T2)', () => {
+  it('gives every deck one seam plan per socket and a clean gate on real ships', () => {
+    for (const spec of [PATROL_SPEC, LONG_HAUL_SPEC, SCIENCE_SPEC]) {
+      const ship = assembleShip(spec)
+      for (const deck of ship.decks) {
+        const sockets = deck.modules.reduce((sum, owner) => sum + owner.doors.length, 0)
+        expect(deck.seams.length).toBeGreaterThan(0)
+        // One plan per socket: joins contribute one plan for their two
+        // sockets, blanks one each.
+        expect(deck.seams.length).toBe(deck.blanks.length + deck.joins.length)
+        expect(deck.seams.length).toBeLessThanOrEqual(sockets)
+        for (const plan of deck.seams) {
+          expect(plan.deckId).toBe(deck.deckId)
+          expect(plan.deckIndex).toBe(deck.deckIndex)
+          expect(plan.watertight).toBe(true)
+          expect(plan.problems).toEqual([])
+          expect(plan.sealedBy).not.toBe('none')
+        }
+        // The generated parts join the deck's geometry partition.
+        const seamParts = deck.seams.reduce((sum, plan) => sum + plan.parts.length, 0)
+        expect(placedPartsOf(deck).length).toBe(
+          deck.modules.reduce((sum, owner) => sum + owner.parts.length, 0) + seamParts,
+        )
+      }
+      expect(assemblyProblems(ship)).toEqual([])
+    }
+  })
+
+  it('reports the rig\u2019s open seam from the assembled geometry', () => {
+    const rig = assembleShip(STRESS_SPEC, { requireValidSpec: false })
+    const rig1 = rig.decks[1]
+    const plan = rig1.seams.find((candidate) => candidate.kind === 'spine')
+    expect(plan?.gapMm).toBe(10)
+    expect(plan?.watertight).toBe(false)
+    const report = assemblyProblems(rig).join('\n')
+    expect(report).toMatch(/open seam of 10\.0 mm between the mating wall faces/)
+    expect(report).toMatch(/the watertight cap is < 2 mm/)
   })
 })
 

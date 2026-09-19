@@ -21,7 +21,11 @@
  *    `DeckNode.geometry` / `DeckNode.instances`;
  *  - `DeckJoin` / `SocketScan` are the socket joins the deck actually
  *    forms — M3-T2 generates its mating geometry from exactly these, never
- *    freehand (BUILD_PLAN rule 8), and M3-T5 walks them.
+ *    freehand (BUILD_PLAN rule 8), and M3-T5 walks them;
+ *  - `SeamPlan` is that mating geometry + its measured verdict: the sleeve
+ *    generated from a join's two sockets, the plug generated from a blanked
+ *    socket, and the watertight measurement taken on the emitted parts (§8
+ *    bullet 1, live at M3-T2 — see seams.ts).
  *
  * Everything here is meters, world space (deck floors at
  * `deckFloorYFor(deckIndex)`, nose → aft), with grid-aligned quarter-turn
@@ -140,6 +144,87 @@ export interface PieceShape {
   mouldAxis?: Extract<PartAxis, 'x' | 'y'>
 }
 
+/** Joins/sockets one deck's seam pass has to seal (M3-T2). */
+export type SeamKind = JoinKind | 'blank'
+
+/**
+ * How a socket ends up closed (M3-T2):
+ *  - 'sleeve' — a join: mating geometry generated from the two door sockets,
+ *    spanning the seam between the two wall faces (never freehand);
+ *  - 'plug' — a blanked socket nothing else closes: a blanking sleeve seated
+ *    on the socket plane from the socket's own opening;
+ *  - 'hatch' — the socket is already sealed by the owner module's own
+ *    `fillsSocket` hatch (M2); the plan carries it as evidence, no geometry;
+ *  - 'none' — nothing closes it (reported, never silently repaired).
+ */
+export type SeamSeal = 'sleeve' | 'plug' | 'hatch' | 'none'
+
+/**
+ * One axis-aligned rectangle in a join's wall plane, world meters. Every
+ * mating wall in a ship is vertical and axis-aligned (quarter-turn yaws keep
+ * facings axial), so a plane rectangle is `u` (the plane's horizontal world
+ * axis: 0 = X, 2 = Z) × `v` (world Y).
+ */
+export interface SeamRect {
+  horizontal: 0 | 2
+  uLo: number
+  uHi: number
+  vLo: number
+  vHi: number
+}
+
+/** One side of a seam: the socket, its wall plane, and the seal's reach past it. */
+export interface SeamSide {
+  side: 'a' | 'b'
+  door: PlacedDoor
+  /** World coordinate of this side's wall plane along the join normal, meters. */
+  plane: number
+  /**
+   * How far the generated seal reaches PAST this wall plane, meters
+   * (negative = it stops short, i.e. an open seam remains there).
+   */
+  biteM: number
+}
+
+/**
+ * One seam the M3-T2 pass enforces: the socket interface, the annulus the
+ * mating geometry must cover, and the measured verdict. `parts` are the
+ * generated world parts (already part of the deck's geometry partition);
+ * `sealEvidence` is the module's OWN sealing geometry when the socket seals
+ * itself — evidence only, never re-emitted.
+ */
+export interface SeamPlan {
+  /** Stable id (`deck-${deckIndex}-seam-${n}-${kind}`). */
+  id: string
+  kind: SeamKind
+  deckIndex: number
+  deckId: string
+  /** The sockets the plan was generated from: two for a join, one for a blank. */
+  doors: PlacedDoor[]
+  /** The rectangle the two mating wall faces share (join), or the face (blank). */
+  contact: SeamRect
+  /** The pass-through / opening rectangle that must stay clear or be filled. */
+  opening: SeamRect
+  /** `contact` minus `opening`: the annulus the sleeve must cover. */
+  required: SeamRect[]
+  /** Along-normal separation between the two wall planes, mm (0 for a blank). */
+  gapMm: number
+  /** Per-side wall plane + measured bite (one entry for a blanked socket). */
+  sides: SeamSide[]
+  /** How the socket is closed. */
+  sealedBy: SeamSeal
+  /** Generated world parts (empty for 'hatch' — the module seals its own). */
+  parts: PlacedPart[]
+  /** True when the seal must block a walker (a plug fills a real opening). */
+  solid: boolean
+  /** The owner module's own sealing parts, when `sealedBy === 'hatch'`. */
+  sealEvidence: PlacedPart[]
+  /** Measured watertightness verdict for this seam (problems empty = watertight). */
+  watertight: boolean
+  /** Every watertightness problem measured on the generated geometry. */
+  problems: string[]
+}
+
 /** One merged geometry group plus the parts it merges (one draw call). */
 export interface GroupPlan {
   group: GeometryGroup
@@ -174,6 +259,8 @@ export interface DeckAssembly {
   joins: DeckJoin[]
   /** Door sockets that join nothing (legal blanks — M3-T2 sleeves them). */
   blanks: PlacedDoor[]
+  /** The seam pass (M3-T2): mating geometry + watertight verdict per socket. */
+  seams: SeamPlan[]
   /** The geometry partition behind `node.geometry`. */
   groups: GroupPlan[]
   /** The instancing partition behind `node.instances`. */
