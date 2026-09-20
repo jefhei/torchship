@@ -913,12 +913,12 @@ export function seamPlansOf(ship: ShipAssembly): SeamPlan[] {
 }
 
 /** Every generated seam part of one deck (part of its geometry partition). */
-export function seamPartsOf(deck: DeckAssembly): PlacedPart[] {
+export function seamPartsOf(deck: Pick<DeckAssembly, 'seams'>): PlacedPart[] {
   return deck.seams.flatMap((plan) => plan.parts)
 }
 
 /** The seam parts that must block a walker — M3-T3's hull input. */
-export function seamSolidParts(deck: DeckAssembly): PlacedPart[] {
+export function seamSolidParts(deck: Pick<DeckAssembly, 'seams'>): PlacedPart[] {
   return deck.seams.filter((plan) => plan.solid).flatMap((plan) => plan.parts)
 }
 

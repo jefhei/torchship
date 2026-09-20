@@ -3,9 +3,8 @@
  *
  * The fixture data (ShipSpec + the layout contract + the M1-T3 socket
  * resolver over the fixture-time CONTRACT_KIT + the M2-T7 authored kit + the
- * M3-T1/T2 assembler) supports REAL checks for five bullets today; collision
- * (bullet 4) is a declared target in registry.ts until M3-T3 supplies the
- * missing input:
+ * M3-T1/T2/T3 assembler) supports REAL checks for all six bullets; the last
+ * one (collision, bullet 4) went live at M3-T3:
  *
  *  - checkSeamsWatertight    (§8 bullet 1, 'seams-watertight', LIVE at
  *    M3-T2): the assembler generates the mating/closing geometry from the
@@ -48,6 +47,13 @@
  *    inside the deck, not intersecting hulls) needs collision geometry and
  *    is M3-T6's.
  *
+ *  - checkCollisionMatch     (§8 bullet 4, 'collision-match', LIVE at
+ *    M3-T3): the deck hull is the modules' own collision hints placed (one box
+ *    per solid part) plus the generated blanking plugs (M3-T2), measured
+ *    against the world bounds of the visible geometry it stands for — within
+ *    the 10 cm cap per deck, both directions — with every pass-through the
+ *    joins open left clear of hull boxes.
+ *
  *  - checkRoomLit            (§8 bullet 6, 'room-lit', LIVE at M2-T7): every
  *    module INSTANCE in the spec carries ≥1 light fixture, read from the
  *    AUTHORED kit's light sockets (src/kit/modules/) — light sockets are M2
@@ -56,8 +62,9 @@
  *    the spec's module refs PLUS the implicit per-deck spine band the
  *    assembler synthesizes (M2-T6), so a dark shaft counts as a dark room.
  *
- * All five are wired into the harness via LIVE_CHECKS; a stub invariant has no
- * entry here, which is what makes the harness report it `deferred`.
+ * All six are wired into the harness via LIVE_CHECKS; a stub invariant has no
+ * entry here, which is what makes the harness report it `deferred`. No stub
+ * remains after M3-T3.
  */
 
 import type { InvariantCheck, InvariantId } from './registry'
@@ -73,7 +80,14 @@ import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import type { KitManifest, ShipSpec } from '../types'
 import { CONTRACT_KIT, doorTallies, hatchAlignmentProblems } from '../validation'
 import { AUTHORED_KIT, AUTHORED_MODULES } from '../kit/modules/registry'
-import { assembleShip, seamTally, seamsWatertightProblems } from '../assembler'
+import {
+  COLLISION_MATCH_TOLERANCE_M,
+  assembleShip,
+  collisionProblems,
+  collisionTally,
+  seamTally,
+  seamsWatertightProblems,
+} from '../assembler'
 import type { ShipAssembly } from '../assembler'
 
 /**
@@ -263,6 +277,54 @@ export const checkSeamsWatertight: InvariantCheck = (spec: ShipSpec) => {
 }
 
 /**
+ * §8 bullet 4 live check (LIVE at M3-T3). "Collision hull matches visible
+ * geometry within 10 cm per deck" — measured on the ASSEMBLED ship: the deck
+ * hull is the modules' own collision hints placed (one box per solid part,
+ * M2) plus the generated blanking plugs (M3-T2), and this check reads the
+ * assembler's verdict on it (src/assembler/collision.ts) — every hull box is
+ * accounted for one-for-one with the geometry it stands for, differs from it
+ * by ≤ 10 cm in both directions (uncovered: a clippable wall; excess: an
+ * invisible wall), and stands clear of every door-socket pass-through (the
+ * walker can pass between mated modules).
+ *
+ * Like the seams check it assembles the spec itself (the harness hands checks
+ * a spec, not a ship), with the validator gate off so a REJECTED rig still
+ * reports its hull verdict instead of throwing.
+ */
+export const checkCollisionMatch: InvariantCheck = (spec: ShipSpec) => {
+  let ship: ShipAssembly
+  try {
+    ship = assembleShip(spec, { requireValidSpec: false })
+  } catch (error) {
+    return {
+      status: 'fail',
+      detail:
+        `the ship cannot be assembled, so its collision hull cannot be measured: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    }
+  }
+
+  const problems = collisionProblems(ship)
+  if (problems.length > 0) {
+    return { status: 'fail', detail: problems.join('; ') }
+  }
+
+  const tally = collisionTally(ship)
+  const capMm = COLLISION_MATCH_TOLERANCE_M / MM
+  return {
+    status: 'pass',
+    detail:
+      `every deck's hull matches its visible geometry: ${tally.boxes} box(es) ` +
+      `(${tally.moduleBoxes} placed module hint${tally.moduleBoxes === 1 ? '' : 's'} + ` +
+      `${tally.seamBoxes} generated plug${tally.seamBoxes === 1 ? '' : 's'}) over ` +
+      `${tally.decks.length} deck${tally.decks.length === 1 ? '' : 's'}, max deviation ` +
+      `${(tally.maxDeviationM / MM).toFixed(1)} mm (cap ≤ ${capMm} mm per deck), and all ` +
+      `${tally.joins} door-socket pass-through${tally.joins === 1 ? '' : 's'} left clear of ` +
+      `hull boxes (max intrusion ${(tally.maxIntrusionM / MM).toFixed(1)} mm)`,
+  }
+}
+
+/**
  * §8 bullet 6 rule: every module INSTANCE in the spec carries ≥1 light fixture
  * — no legally-dark room. Instances are the spec's module refs PLUS the implicit
  * per-deck spine band (M2-T6: the assembler synthesizes one band per deck, so a
@@ -374,6 +436,7 @@ export const LIVE_CHECKS: Partial<Record<InvariantId, InvariantCheck>> = {
   'seams-watertight': checkSeamsWatertight,
   'hatch-alignment': checkHatchAlignment,
   'spine-connectivity': checkSpineConnectivity,
+  'collision-match': checkCollisionMatch,
   'spawn-inside': checkSpawnInsideSpec,
   'room-lit': checkRoomLit,
 }

@@ -18,8 +18,9 @@
  *             into a continuous run;
  *  4. EMIT    the deck's kit parts are placed in world space and partitioned
  *             into merged per-slot `GeometryGroup`s and instanced `InstanceBatch`
- *             batches (batches.ts), with the deck's collision hull (the world
- *             boxes of every module's collision hint) and named interactives
+ *             batches (batches.ts), with the deck's collision hull (the modules'
+ *             own hints placed plus the generated seam geometry that must block
+ *             a walker — M3-T3, collision.ts) and named interactives
  *             (doors + hatches);
  *  5. SEAL    the M3-T2 seam pass (seams.ts) generates the mating geometry for
  *             every join and the closing geometry for every blanked socket
@@ -63,6 +64,7 @@ import type {
 } from '../types'
 import { assertValidShipSpec, moduleDoors } from '../validation'
 import { DEFAULT_MIN_INSTANCES, partitionParts } from './batches'
+import { deckHullBoxes } from './collision'
 import { scanDeckSockets } from './joins'
 import { facingTurns, worldBoxesOf, worldOriginOf, worldPartsOf } from './place'
 import { selfSealingAssemblyOf, seamPlansForDeck } from './seams'
@@ -238,7 +240,9 @@ export function assembleDeck(
     geometry: groups.map((plan) => plan.group),
     instances: batches.map((plan) => plan.batch),
     interactives: interactivesOf(placed, deck.id),
-    collision: { boxes: placed.flatMap((owner) => owner.boxes) },
+    // M3-T3: the modules' own hints placed, plus the generated seam geometry
+    // that must block a walker (M3-T2's blanking plugs) — see collision.ts.
+    collision: { boxes: deckHullBoxes(placed, seams) },
   }
 
   return {

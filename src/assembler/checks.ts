@@ -24,9 +24,12 @@
  *  - the interactives are resolvable: ids unique across the ship, sources point
  *    at real module instances, every 'door' sits at its socket and every 'hatch'
  *    sits at the socket it seals with the hatch's own yaw;
- *  - the hull is the modules' own: one box per solid part of every module
- *    instance (rooms + band), finite, non-degenerate, and inside the module's
- *    world bounds within the same structural allowances the M2 gate uses;
+ *  - the hull is the deck's own (M3-T3): one box per solid part of every module
+ *    instance (rooms + band), placed from the module's collision hint, plus one
+ *    box per generated solid seam part (M3-T2's plugs) — finite, non-degenerate,
+ *    inside the module's world bounds within the same structural allowances the
+ *    M2 gate uses, matching the visible geometry within the §8 bullet-4 10 cm
+ *    cap, and clear of every door-socket pass-through (collision.ts);
  *  - every room lands on the spine (its `spine-door` is in a spine join), and
  *    every join it forms is within the M0-T2 hatch cap — a misaligned join is
  *    reported, not repaired (the validator is the accept/reject gate; this is
@@ -46,9 +49,11 @@ import { moduleBounds, moduleCollisionBoxes } from '../kit/modules/types'
 import { placePart } from '../kit/modules/placement'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import { DEFAULT_MIN_INSTANCES, mouldOf, placementFor } from './batches'
+import { collisionProblems, deckHull, hullLabel } from './collision'
 import { joinLabel, spineJoinOf } from './joins'
 import { boxContains, isWellFormedBox, transformAabb, worldOriginOf } from './place'
 import { placedPartsOf } from './assemble'
+import { seamSolidParts } from './seams'
 import { spineRunProblems } from './spineRun'
 import type { DeckAssembly, PlacedModule, SeamPlan, ShipAssembly } from './types'
 
@@ -373,15 +378,38 @@ export function assemblyProblems(
       )
     }
 
-    // 7. The collision hull is the modules' own hints, placed.
-    const expectedBoxes = assembly.modules.reduce(
-      (sum, owner) => sum + moduleCollisionBoxes(owner.module).length,
-      0,
-    )
+    // 7. The collision hull is the modules' own hints placed, plus the
+    // generated seam geometry that must block a walker (M3-T3: a blanked
+    // socket nothing else seals is plugged, so its plug is solid). The
+    // bullet-4 measurement itself (match against the visible geometry +
+    // pass-through clearance) is rule 11.
+    const expectedBoxes =
+      assembly.modules.reduce(
+        (sum, owner) => sum + moduleCollisionBoxes(owner.module).length,
+        0,
+      ) + seamSolidParts(assembly).length
     if (node.collision.boxes.length !== expectedBoxes) {
       problems.push(
         `${where}: collision hull has ${node.collision.boxes.length} box(es) for ${expectedBoxes} ` +
-          `solid part(s) across its modules`,
+          `solid part(s) across its modules' hints and its generated plugs`,
+      )
+    }
+    const hull = deckHull(assembly.modules, assembly.seams)
+    hull.forEach((entry, index) => {
+      const box = node.collision.boxes[index]
+      if (
+        box === undefined ||
+        !sameVec(box.min, entry.box.min) ||
+        !sameVec(box.max, entry.box.max)
+      ) {
+        problems.push(
+          `${where}: collision box ${index} is not the hull the deck builds (${hullLabel(entry)})`,
+        )
+      }
+    })
+    if (hull.length !== node.collision.boxes.length) {
+      problems.push(
+        `${where}: the deck's hull holds ${hull.length} box(es), the node carries ${node.collision.boxes.length}`,
       )
     }
     for (const owner of assembly.modules) {
@@ -499,6 +527,11 @@ export function assemblyProblems(
 
   // 10. The generated run tiles (the vertical half of §8 bullet 3).
   problems.push(...spineRunProblems(spec))
+
+  // 11. The collision hull is the assembler's own (M3-T3): the modules' hints
+  // placed + the generated solid seam parts, complete, matching the visible
+  // geometry within the §8 bullet-4 cap, and clear of every pass-through.
+  problems.push(...collisionProblems(ship))
 
   return problems
 }

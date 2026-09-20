@@ -16,7 +16,10 @@
  *                                  spec-level live check (see checks.ts)
  *                                  and re-derives it socket-resolved in the
  *                                  spec validator (src/validation/)
- *   bullet 4 (collision-match)   → M3-T3 per-deck hull builder
+ *   bullet 4 (collision-match)   → M3-T3 per-deck hull builder — LIVE at
+ *                                  M3-T3 (hull from the modules' collision
+ *                                  hints + the generated plugs, measured
+ *                                  against the visible geometry, see checks.ts)
  *   bullet 5 (spawn-inside)      → M3-T6 spawn selection (spec facet live
  *                                  at M0-T6; containment half deferred)
  *   bullet 6 (room-lit)          → M2-T7 kit test harness — LIVE at M2-T7
@@ -26,13 +29,16 @@
  *  - `live` — the harness runs a real check today (see src/invariants/checks.ts
  *    for the implementation), or
  *  - `stub` — a declared TARGET: the fixture data available at M0 does not
- *    carry what the check needs (collision hulls for bullet 4), so the harness
- *    reports it `deferred` with its owner and required input. The owner
- *    milestone replaces the stub with a real check; the registry entry is the
- *    contract it slots into. BUILD_PLAN M0 gate: "invariant test harness runs
- *    (may fail — that's fine, they're targets)".
+ *    carry what the check needs, so the harness reports it `deferred` with its
+ *    owner and required input. The owner milestone replaces the stub with a
+ *    real check; the registry entry is the contract it slots into. BUILD_PLAN
+ *    M0 gate: "invariant test harness runs (may fail — that's fine, they're
+ *    targets)". **No stubs remain** (M3-T3 was the last owner); the `stub`
+ *    status and the harness's `deferred` path stay in the contract for any
+ *    future invariant. All six bullets are live over all four fixtures.
  */
 
+import { COLLISION_MATCH_TOLERANCE_M } from '../assembler/collision'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import type { ShipSpec } from '../types'
 
@@ -133,11 +139,10 @@ export const AUTO_INVARIANTS: readonly AutoInvariant[] = [
     title: 'Collision hull matches visible geometry',
     requirement:
       'The per-deck collision hull matches visible geometry within 10 cm per deck.',
-    limit: { value: 0.1, unit: 'm', relation: '<=' },
-    status: 'stub',
+    limit: { value: COLLISION_MATCH_TOLERANCE_M, unit: 'm', relation: '<=' },
+    status: 'live',
     owner: 'M3-T3',
-    needs:
-      'per-deck collision hulls and the assembled geometry they must match (M3-T1 / M3-T3 output)',
+    note: 'Live at M3-T3 (checks.ts checkCollisionMatch): the deck hull is the modules\u2019 OWN collision hints placed (one box per solid part, the M2 authoring rule, so doorways stay open) plus the generated blanking plugs (M3-T2), and the check measures every box against the world bounds of the visible geometry it stands for in BOTH directions \u2014 uncovered (the geometry pokes out of the box: a clippable wall) and excess (the box reaches past the geometry: an invisible wall), capped at 0.1 m per deck \u2014 plus that every box is accounted for one-for-one and that no box stands in a door-socket join\u2019s pass-through (the walker can pass between mated modules). Runs over the assembled ship (requireValidSpec: false, so a rejected rig still reports its hull verdict). Measured on the canonical fixtures: 0.0 mm deviation and no intrusion on every deck of every ship \u2014 including the QA rig, whose declared defects are alignment/run/seam problems, not hull mismatches.',
   },
   {
     id: 'spawn-inside',

@@ -34,8 +34,9 @@ import type {
   Rotation,
   Vec3,
 } from '../types'
-import { moduleParts } from '../kit/modules/types'
+import { moduleParts, moduleSolidParts } from '../kit/modules/types'
 import type { AuthoredModule } from '../kit/modules/types'
+import type { KitPart } from '../kit/types'
 import { placeParts } from '../kit/modules/placement'
 import { moduleOrigin } from '../validation'
 import { pieceShapeOf } from './batches'
@@ -116,13 +117,39 @@ export function worldPartsOf(
   rotation: Rotation,
   source: ModuleSource,
 ): PlacedPart[] {
-  return placeParts(moduleParts(module), { position: origin, rotation }).map(
-    (part) => ({
-      part,
-      materialSlot: part.materialSlot,
-      pieceId: pieceShapeOf(part).id,
-      source,
-    }),
+  return placeParts(moduleParts(module), { position: origin, rotation }).map((part) =>
+    placedPartOf(part, source),
+  )
+}
+
+/**
+ * One world part tagged with its provenance and canonical instancing key —
+ * the shape every `PlacedPart` in the assembly takes (M3-T1's parts, and the
+ * M3-T3 hull's geometry side).
+ */
+export function placedPartOf(part: KitPart, source: ModuleSource): PlacedPart {
+  return {
+    part,
+    materialSlot: part.materialSlot,
+    pieceId: pieceShapeOf(part).id,
+    source,
+  }
+}
+
+/**
+ * The module's SOLID parts in world space, in build order: the geometry the
+ * deck's collision hull must stand for (M3-T3). Walk-through fixtures
+ * (conduit, panel lights, screens, hatch leaves) are deliberately absent —
+ * `solid` is the M2 authoring declaration of what blocks a walker.
+ */
+export function worldSolidPartsOf(
+  module: AuthoredModule,
+  origin: Vec3,
+  rotation: Rotation,
+  source: ModuleSource,
+): PlacedPart[] {
+  return placeParts(moduleSolidParts(module), { position: origin, rotation }).map(
+    (part) => placedPartOf(part, source),
   )
 }
 

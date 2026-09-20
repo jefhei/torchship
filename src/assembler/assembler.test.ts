@@ -19,7 +19,9 @@
  *  - INTERACTIVES: a door per room door socket (at the socket, yawed to its
  *    facing) and a hatch per socket-sealing hatch (at the same socket, facing
  *    into the room — the yaw inverse of the doorway's);
- *  - COLLISION: the modules' own hints, placed — one box per solid part;
+ *  - COLLISION: the deck hull is the modules' own hints, placed (one box per
+ *    solid part), PLUS the generated blanking plugs (M3-T2) — the geometry the
+ *    §8 bullet-4 measurement and collision.test.ts (M3-T3) work on;
  *  - THE GATE: the three real ships assemble clean, the QA rig needs the
  *    explicit opt-in and comes back with its declared defects named.
  *
@@ -684,18 +686,23 @@ describe('per-deck collision hull', () => {
     for (const fixture of SHIP_FIXTURES) {
       const ship = assembleShip(fixture.spec, { requireValidSpec: fixture.expectValid })
       for (const deck of ship.decks) {
+        const plugs = deck.seams
+          .filter((plan) => plan.solid)
+          .flatMap((plan) => plan.parts)
         expect(deck.node.collision.boxes).toHaveLength(
-          expectedDeckBoxes(fixture.spec.decks[deck.deckIndex]),
+          expectedDeckBoxes(fixture.spec.decks[deck.deckIndex]) + plugs.length,
         )
-        expect(deck.node.collision.boxes).toEqual(
-          deck.modules.flatMap((owner) => owner.boxes),
-        )
+        // The modules' own hints, placed, then the generated plugs (M3-T3).
+        expect(deck.node.collision.boxes).toEqual([
+          ...deck.modules.flatMap((owner) => owner.boxes),
+          ...plugs.map((part) => partBounds(part.part)),
+        ])
       }
     }
     const patrol = assembleShip(PATROL_SPEC)
-    // head 37 solid parts + the band's 28.
-    expect(patrol.decks[0].node.collision.boxes).toHaveLength(37 + 28)
-    expect(patrol.decks[4].node.collision.boxes).toHaveLength(102 + 28)
+    // head 37 solid parts + the band's 28 + the 3 blanked band faces M3-T2 plugs.
+    expect(patrol.decks[0].node.collision.boxes).toHaveLength(37 + 28 + 3)
+    expect(patrol.decks[4].node.collision.boxes).toHaveLength(102 + 28 + 3)
   })
 
   it('places the hull in world space: the band hull spans the shaft column', () => {

@@ -15,9 +15,15 @@
  *    at M3-T2), hatch-alignment (socket-resolved, LIVE at M1-T3),
  *    spine-connectivity and spawn-inside spec facet (live since M0-T6),
  *    room-lit (live at M2-T7 over the authored kit's light sockets);
- *  - the remaining stub invariant (collision-match) is a declared target: the
- *    harness reports it 'deferred' with its owning milestone — the input it
- *    needs (collision hulls) does not exist until M3-T3 lands;
+ *  - collision-match — the LAST declared stub — went live at M3-T3: every
+ *    deck's hull (the modules' own collision hints placed + the generated
+ *    plugs) matches the visible geometry it stands for within the 10 cm cap
+ *    and leaves every door-socket pass-through clear, on all four fixtures
+ *    (the rig's declared defects are alignment/run/seam problems, not hull
+ *    mismatches). No invariant is deferred any more;
+ *  - the synthetic mini-specs prove the checks are real logic, not
+ *    fixture-shaped tautologies: a broken two-deck spec (or a doctored kit)
+ *    fails where its canonical twin passes;
  *  - the harness runs over all four fixtures without throwing and returns
  *    attributable runs (fixture × invariant).
  *
@@ -30,6 +36,7 @@ import {
   AUTO_INVARIANTS,
   INVARIANT_IDS,
   LIVE_CHECKS,
+  checkCollisionMatch,
   checkHatchAlignment,
   checkRoomLit,
   checkSeamsWatertight,
@@ -68,7 +75,14 @@ import type { RoomModuleId } from '../fixtures'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import { deckFloorYFor } from '../types'
 import type { DeckSpec, KitManifest, ModuleRef, ShipSpec } from '../types'
-import { AUTHORED_KIT } from '../kit/modules/registry'
+import {
+  AUTHORED_KIT,
+  AUTHORED_MODULES,
+  getAuthoredModule,
+} from '../kit/modules/registry'
+import { assemblyParts } from '../kit/modules/types'
+import { partsBounds } from '../kit/parts'
+import { assembleShip, collisionProblems } from '../assembler'
 
 /* ---------- helpers ------------------------------------------------ */
 
@@ -97,7 +111,7 @@ function miniSpec(roomPerDeck: RoomModuleId[]): ShipSpec {
 const CANONICAL_THREE = miniSpec(['head', 'galley', 'engineering'])
 
 /** Expected run-status rows: [seams, hatch, spine, collision, spawn, lit]. */
-const REAL_SHIP_ROW = ['pass', 'pass', 'pass', 'deferred', 'pass', 'pass'] as const
+const REAL_SHIP_ROW = ['pass', 'pass', 'pass', 'pass', 'pass', 'pass'] as const
 
 /* ---------- registry ----------------------------------------------- */
 
@@ -134,15 +148,17 @@ describe('invariant registry (PRD §8 [auto])', () => {
     expect(SEAM_TOLERANCES.hatchAlignMm).toBe(5)
   })
 
-  it('marks the five checks with real bodies live and collision-match as a stub', () => {
+  it('marks all six checks live — no stub remains after M3-T3', () => {
     expect(liveInvariants().map((x) => x.id)).toEqual([
       'seams-watertight',
       'hatch-alignment',
       'spine-connectivity',
+      'collision-match',
       'spawn-inside',
       'room-lit',
     ])
-    expect(stubInvariants().map((x) => x.id)).toEqual(['collision-match'])
+    expect(stubInvariants()).toEqual([])
+    expect(liveInvariants()).toHaveLength(AUTO_INVARIANTS.length)
   })
 
   it('assigns each invariant the milestone that owns its real check', () => {
@@ -155,13 +171,15 @@ describe('invariant registry (PRD §8 [auto])', () => {
     expect(ownerOf('room-lit')).toBe('M2-T7')
   })
 
-  it('gives every invariant a title, requirement, and stub-target detail', () => {
+  it('gives every invariant a title, requirement, owner and live status', () => {
     for (const inv of AUTO_INVARIANTS) {
       expect(inv.title.length).toBeGreaterThan(0)
       expect(inv.requirement.length).toBeGreaterThan(0)
-    }
-    for (const stub of stubInvariants()) {
-      expect(stub.needs?.length ?? 0).toBeGreaterThan(0)
+      expect(inv.owner).toMatch(/^M\d-T\d+$/)
+      expect(inv.status).toBe('live')
+      expect(inv.note?.length ?? 0).toBeGreaterThan(0)
+      // A stub is the only shape that needs a `needs` input; none is a stub.
+      expect(inv.needs).toBeUndefined()
     }
   })
 
@@ -539,6 +557,92 @@ describe('seams-watertight live check (PRD §8 bullet 1, live at M3-T2)', () => 
   })
 })
 
+/* ---------- collision-match (live at M3-T3) -------------------------- */
+
+describe('collision-match live check (PRD §8 bullet 4, live at M3-T3)', () => {
+  it('passes on the three real ships with the measured hull tally', () => {
+    for (const fixture of expectValidFixtures()) {
+      const result = checkCollisionMatch(fixture.spec)
+      expect(result.status).toBe('pass')
+      expect(result.detail).toMatch(/every deck's hull matches its visible geometry/)
+      expect(result.detail).toMatch(/max deviation 0\.0 mm \(cap ≤ 100 mm per deck\)/)
+      expect(result.detail).toMatch(/generated plugs/)
+      expect(result.detail).toMatch(
+        /door-socket pass-throughs left clear of hull boxes/,
+      )
+    }
+    // Patrol: 423 placed module hints + 15 generated plugs over 5 decks, 5 joins.
+    const patrol = checkCollisionMatch(PATROL_SPEC)
+    expect(patrol.detail).toContain('438 box(es)')
+    expect(patrol.detail).toContain('423 placed module hints + 15 generated plugs')
+    expect(patrol.detail).toContain('over 5 decks')
+    expect(patrol.detail).toContain('5 door-socket pass-throughs left clear')
+  })
+
+  it('is the harness verdict for the bullet, on every fixture', () => {
+    const run = runInvariant(
+      getAutoInvariant('collision-match'),
+      getShipFixture('patrol'),
+    )
+    expect(run.status).toBe('pass')
+    expect(run.invariantId).toBe('collision-match')
+    expect(run.detail).toContain('matches its visible geometry')
+  })
+
+  it('catches a hull box in the doorway (a doctored kit — the hull\u2019s only input)', () => {
+    // The kit is the only input that can break the hull: it is derived from the
+    // modules' own hints, so no spec-only change can mismatch a deck's hull.
+    // This injects a box where the spine doorway is — the walker would be walled in.
+    const head = getAuthoredModule('head')
+    const hatch = head.assemblies.find((assembly) => assembly.id === 'hatch-spine')
+    expect(hatch).toBeDefined()
+    const doctored = {
+      ...head,
+      manifest: {
+        ...head.manifest,
+        collisionHint: {
+          boxes: [
+            ...head.manifest.collisionHint.boxes,
+            partsBounds(assemblyParts(hatch!)),
+          ],
+        },
+      },
+    }
+    const broken = assembleShip(PATROL_SPEC, {
+      modules: [
+        doctored,
+        ...AUTHORED_MODULES.filter((module) => module.manifest.id !== 'head'),
+      ],
+      requireValidSpec: false,
+    })
+    expect(collisionProblems(broken).join('\n')).toMatch(
+      /stands 60\.0 mm inside the pass-through of spine band "\+z" ↔ head#0 "spine-door"/,
+    )
+    // The canonical authored kit on the same spec still verifies clean.
+    expect(checkCollisionMatch(PATROL_SPEC).status).toBe('pass')
+  })
+
+  it('fails a ship that cannot be assembled at all', () => {
+    const unknown: ShipSpec = {
+      ...CANONICAL_THREE,
+      decks: [
+        CANONICAL_THREE.decks[0],
+        {
+          ...CANONICAL_THREE.decks[1],
+          modules: [{ moduleId: 'cargo', rotation: 0, offset: [0, 0, 0] }],
+        },
+        CANONICAL_THREE.decks[2],
+      ],
+    }
+    const result = checkCollisionMatch(unknown)
+    expect(result.status).toBe('fail')
+    expect(result.detail).toMatch(
+      /cannot be assembled, so its collision hull cannot be measured/,
+    )
+    expect(result.detail).toMatch(/references unknown kit module "cargo"/)
+  })
+})
+
 /* ---------- room-lit (live at M2-T7) -------------------------------- */
 
 describe('room-lit live check (PRD §8 bullet 6, live at M2-T7)', () => {
@@ -621,36 +725,32 @@ describe('invariant harness', () => {
     }
   })
 
-  it('real ships: seams/collision deferred; hatch+spine+spawn+lit pass', () => {
+  it('real ships: all six bullets pass (no deferred runs left after M3-T3)', () => {
     for (const fixture of expectValidFixtures()) {
       const runs = runInvariantHarness(fixture)
       expect(runs.map((r) => r.status)).toEqual([...REAL_SHIP_ROW])
     }
+    expect(runInvariantHarness(getShipFixture('patrol')).map((r) => r.status)).toEqual([
+      ...REAL_SHIP_ROW,
+    ])
   })
 
-  it('stress rig: hatch/spine/spawn/seams fail; collision deferred, lit passes', () => {
+  it('stress rig: seams/hatch/spine/spawn fail; collision + lit pass', () => {
     const runs = runInvariantHarness(getShipFixture('stress'))
     expect(runs.map((r) => r.status)).toEqual([
       'fail', // seams-watertight — live at M3-T2: rig-1's 10 mm open seam
       'fail', // hatch-alignment — socket-resolved (M1-T3): rig-1/2/3/4 all fail
       'fail', // spine-connectivity — live spec-level run continuity
-      'deferred',
+      'pass', // collision-match — live at M3-T3: the rig moves kit and hull together
       'fail', // spawn-inside — no crew deck at index 1
       'pass', // room-lit — live at M2-T7; the rig's defects are geometry, not lighting
     ])
   })
 
-  it('deferred runs name the owning milestone and the missing input', () => {
-    const owners: Record<string, string> = {
-      'collision-match': 'M3-T3',
-    }
-    for (const [invariantId, owner] of Object.entries(owners)) {
-      for (const fixture of SHIP_FIXTURES) {
-        const run = runInvariant(getAutoInvariant(invariantId as never), fixture)
-        expect(run.status).toBe('deferred')
-        expect(run.detail).toContain(owner)
-        expect(run.detail).toMatch(/declared target/)
-      }
+  it('no invariant is deferred any more; every run carries a verdict', () => {
+    for (const run of runInvariantHarnessAll()) {
+      expect(['pass', 'fail']).toContain(run.status)
+      expect(run.detail).not.toMatch(/declared target/)
     }
   })
 
@@ -664,9 +764,18 @@ describe('invariant harness', () => {
     expect(spineRuns).toHaveLength(4)
     expect(spineRuns.filter((r) => r.status === 'pass')).toHaveLength(3)
     expect(spineRuns.filter((r) => r.status === 'fail')).toHaveLength(1)
+    // collision-match is live at M3-T3 and passes the whole fixture set.
+    const collisionRuns = runsForInvariant('collision-match')
+    expect(collisionRuns).toHaveLength(4)
+    expect(collisionRuns.every((r) => r.status === 'pass')).toBe(true)
+    expect(
+      collisionRuns.every((r) => r.detail.includes('matches its visible geometry')),
+    ).toBe(true)
     expect(runInvariantById('hatch-alignment', 'patrol').status).toBe('pass')
     expect(runInvariantById('hatch-alignment', 'stress').status).toBe('fail')
     expect(runInvariantById('spine-connectivity', 'stress').status).toBe('fail')
+    expect(runInvariantById('collision-match', 'patrol').status).toBe('pass')
+    expect(runInvariantById('collision-match', 'stress').status).toBe('pass')
     expect(runInvariantById('spawn-inside', 'patrol').status).toBe('pass')
   })
 
