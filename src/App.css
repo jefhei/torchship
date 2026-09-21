@@ -70,3 +70,58 @@
   pointer-events: none;
   user-select: none;
 }
+
+/* ---------------------------------------------------------------------------
+   M3-T4 walkthrough UI: the pointer-lock prompt (while the pointer is free)
+   and the movement HUD (while it is captured). Both live in the DOM over the
+   canvas, so the rig never has to render anything itself.
+   --------------------------------------------------------------------------- */
+
+.walk-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 48px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.walk-prompt-pill {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #d3a860;
+  background: rgba(12, 10, 7, 0.72);
+  border: 1px solid #3a3120;
+  border-radius: 3px;
+  padding: 6px 14px;
+}
+
+.walk-hud {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #7d8694;
+  background: rgba(10, 12, 15, 0.6);
+  border: 1px solid #23272e;
+  border-radius: 3px;
+  padding: 4px 10px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.walk-hud-deck {
+  color: #d3a860;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
