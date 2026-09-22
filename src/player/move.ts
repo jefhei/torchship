@@ -133,6 +133,23 @@ export const LOCOMOTION_KEY_CODES: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * KeyboardEvent.code values that interact with the world (M3-T5: the hatch in
+ * reach of the walker — open it, or close it behind you). Edge-triggered by the
+ * rig: the key press is one action, not a held state.
+ */
+export const INTERACT_KEY_CODES: ReadonlySet<string> = new Set(['KeyE'])
+
+/**
+ * Every code the navigation rig tracks: locomotion (held) plus interaction
+ * (edge). One keydown/keyup listener filters on this set, so a key it does not
+ * know can never reach the machine.
+ */
+export const NAVIGATION_KEY_CODES: ReadonlySet<string> = new Set([
+  ...LOCOMOTION_KEY_CODES,
+  ...INTERACT_KEY_CODES,
+])
+
+/**
  * Planar movement input derived from held keys. `forward` is +1 while moving
  * toward the camera heading (W) and −1 away (S); `strafe` is +1 to the camera's
  * right (D) and −1 to its left (A). Opposing keys cancel (W+S → 0) regardless
@@ -160,6 +177,16 @@ export function isMovementKey(code: string): boolean {
 /** True when the code is a tracked movement or modifier key. */
 export function isLocomotionKey(code: string): boolean {
   return LOCOMOTION_KEY_CODES.has(code)
+}
+
+/** True when the code is the interact key (M3-T5 hatch interaction). */
+export function isInteractKey(code: string): boolean {
+  return INTERACT_KEY_CODES.has(code)
+}
+
+/** True when the code is tracked by the navigation rig at all. */
+export function isNavigationKey(code: string): boolean {
+  return NAVIGATION_KEY_CODES.has(code)
 }
 
 /** Map held key codes to planar movement input (W/S/A/D only). */

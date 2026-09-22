@@ -12,8 +12,9 @@
  * component is the seam that lets that swap happen without touching the rig.
  *
  * `WalkthroughScene` adds the rig (WalkRig.tsx) at the provisional spawn
- * (`defaultSpawnFeet`, spawn.ts — M3-T6 owns the real selection) and the world
- * derived from the assembly (`walkerWorldOf` — deck floors + the M3-T3 hull,
+ * (`defaultSpawnFeet`, spawn.ts — M3-T6 owns the real selection) and the
+ * navigation world derived from the assembly (`navigationWorldOf` — deck floors,
+ * the M3-T3 hull, the M3-T5 ladder runs and the modules' own hatch leaves,
  * never re-derived).
  */
 
@@ -21,9 +22,8 @@ import { useMemo } from 'react'
 import type { ShipAssembly } from '../assembler'
 import { KitParts } from '../kit/render'
 import { WalkRig, type WalkReport } from './WalkRig'
+import { navigationWorldOf } from './nav'
 import { defaultSpawnFeet } from './spawn'
-import { walkerWorldOf } from './walker'
-import type { WalkerWorld } from './walker'
 
 /** Every deck of the assembled ship, drawn from the scene-graph contracts. */
 export function ShipInterior({ assembly }: { assembly: ShipAssembly }) {
@@ -58,7 +58,7 @@ export function WalkthroughScene({
   enabled?: boolean
   onStep?: (report: WalkReport) => void
 }) {
-  const world: WalkerWorld = useMemo(() => walkerWorldOf(assembly), [assembly])
+  const world = useMemo(() => navigationWorldOf(assembly), [assembly])
   const spawn = useMemo(() => defaultSpawnFeet(assembly), [assembly])
 
   return (

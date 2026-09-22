@@ -26,17 +26,18 @@ import {
   setWalkLocked,
 } from './controlsStore'
 import { EYE_HEIGHT_M, WALK_SPEED_M_S } from './move'
+import { navigationWorldOf, type NavigationWorld } from './nav'
 import { WalkRig, type WalkReport } from './WalkRig'
 import { defaultSpawnFeet } from './spawn'
-import { walkerWorldOf, type WalkerWorld } from './walker'
+import type { WalkerWorld } from './walker'
 
 const assembly = assembleShip(PATROL_SPEC)
-const world = walkerWorldOf(assembly)
+const world = navigationWorldOf(assembly)
 const spawn = defaultSpawnFeet(assembly)
 if (spawn === null) {
   throw new Error('WalkRig.test: the Patrol ship has no crew-deck spawn')
 }
-const CREW_FLOOR_Y = world.decks[1].floorY
+const CREW_FLOOR_Y = world.walker.decks[1].floorY
 
 let camera: THREE.PerspectiveCamera
 let domElement: HTMLElement
@@ -251,8 +252,8 @@ describe('WalkRig (M3-T4 first-person rig)', () => {
     // A two-deck world with a plate only under the deeper deck: the walker
     // starts airborne over the head deck and lands on the crew deck, so the
     // report must cross the boundary (this is the M5 deck-indicator path).
-    const twoDeck: WalkerWorld = {
-      ship: world.ship,
+    const twoDeckWalker: WalkerWorld = {
+      ship: world.walker.ship,
       decks: [
         { deckIndex: 0, deckId: 'head', label: 'Head — bridge', floorY: 0 },
         {
@@ -264,6 +265,12 @@ describe('WalkRig (M3-T4 first-person rig)', () => {
       ],
       hull: [{ min: [-5, -3.4, -5], max: [5, -3.2, 5] }],
       bottomFloorY: -3.2,
+    }
+    // No runs and no hatches: this test drives the walker's fall, not the climb.
+    const twoDeck: NavigationWorld = {
+      walker: twoDeckWalker,
+      runs: [],
+      hatches: [],
     }
     const reports: WalkReport[] = []
     render(
@@ -286,12 +293,75 @@ describe('the provisional spawn (M3-T4 plumbing for M3-T6)', () => {
   it('drops the walker into the crew deck’s first room, on its floor', () => {
     expect(spawn[1]).toBeCloseTo(CREW_FLOOR_Y, 10)
     expect(spawn[0]).toBe(0)
-    expect(world.decks.map((deck) => deck.deckId)).toEqual([
+    expect(world.walker.decks.map((deck) => deck.deckId)).toEqual([
       'head',
       'crew',
       'ops',
       'engineering',
       'aft',
     ])
+  })
+})
+
+describe('the M3-T5 rig: hatches and the climb', () => {
+  /** The last report the rig produced, and the frame callback. */
+  function runFrames(count: number): (state: unknown, d: number) => void {
+    const step = frame()
+    frames(count, 0.05, step)
+    return step
+  }
+
+  it('opens the spine hatch with E once the walker is at the door', () => {
+    const reports: WalkReport[] = []
+    render(<WalkRig world={world} spawn={spawn} onStep={(r) => reports.push(r)} />)
+    simulateLock()
+    pressKey('KeyW')
+    runFrames(20)
+    // Walking into the shut hatch stops the walker inside the galley, with the
+    // hatch offered in the report (the HUD's prompt).
+    const atDoor = reports[reports.length - 1]
+    expect(atDoor.deckId).toBe('crew')
+    expect(atDoor.hatchPromptId).toBe('crew-galley#0-spine-door')
+    expect(atDoor.hatchAction).toBeNull()
+    // E opens it, and the report says so.
+    pressKey('KeyE')
+    runFrames(1)
+    const opened = reports.find((report) => report.hatchAction === 'opened')
+    expect(opened).toBeDefined()
+    releaseKey('KeyW')
+  })
+
+  it('walks through the open hatch, mounts the ladder and arrives on the head deck', () => {
+    const reports: WalkReport[] = []
+    render(<WalkRig world={world} spawn={spawn} onStep={(r) => reports.push(r)} />)
+    simulateLock()
+    pressKey('KeyW')
+    runFrames(20)
+    pressKey('KeyE')
+    runFrames(1)
+    // Still holding W: through the doorway, onto the rung line, up the storey.
+    runFrames(120)
+    const climbing = reports.filter((report) => report.phase === 'climb')
+    expect(climbing.length).toBeGreaterThan(0)
+    expect(climbing.every((report) => report.climbDirection === 'up')).toBe(true)
+    expect(climbing.some((report) => report.rungIndex !== null)).toBe(true)
+    const last = reports[reports.length - 1]
+    expect(last.phase).toBe('walk')
+    expect(last.deckId).toBe('head')
+    expect(last.grounded).toBe(true)
+    // The camera is on the head deck's plate, in the lane beside the ladder.
+    expect(camera.position.y).toBeCloseTo(CREW_FLOOR_Y + 3.2 + EYE_HEIGHT_M, 3)
+    releaseKey('KeyW')
+  })
+
+  it('does not work a hatch while the pointer is free (keys are dropped)', () => {
+    const reports: WalkReport[] = []
+    render(<WalkRig world={world} spawn={spawn} onStep={(r) => reports.push(r)} />)
+    pressKey('KeyW')
+    frames(20, 0.05, frame())
+    pressKey('KeyE')
+    frames(3, 0.05, frame())
+    expect(reports.some((report) => report.hatchAction !== null)).toBe(false)
+    releaseKey('KeyW')
   })
 })

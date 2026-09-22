@@ -1,42 +1,48 @@
 /**
- * M3-T4 — the first-person rig.
+ * M3-T5 — the first-person rig, now driving the navigation machine.
  *
- * Mounts three.js PointerLockControls on the R3F camera and drives the walker
- * (src/player/walker.ts) each frame: held WASD (+ Shift sprint, Ctrl crouch)
- * become a planar step under the camera's yaw, gravity integrates along the
- * thrust axis, and the camera rides the eye height over the walker's feet
- * (PRD §6.1: 1.6 m, crouched 1.0 m).
+ * M3-T4 mounted a walker; M3-T5 gives it vertical navigation. The rig itself is
+ * unchanged in shape — it still owns the PointerLockControls, still tracks the
+ * held keys, still writes the camera from the walker's feet every frame — but
+ * the frame step is now `stepNav` (src/player/nav.ts): walk, mount a ladder,
+ * climb, arrive on another deck, and work the hatches with E.
  *
- * Pointer lock engages through the controls bridge (controlsStore): the DOM
- * overlay's click handler calls `requestWalkLock()` and the browser's
- * `pointerlockchange` flows back through `setWalkLocked`. Movement input is
- * only accepted while the pointer is captured (that is what makes WASD safe to
- * bind globally), but the UNDER-BURN PHYSICS ALWAYS RUNS — a walker dropped at
- * spawn, or one who stepped over the spine's crawl opening, falls whether or
- * not the pointer is captured. Only the keys stop.
+ * Three things the rig adds for the mechanic:
+ *  - the INTERACT key is EDGE-triggered (a press is one action), so it lives in
+ *    its own ref and is consumed by the next frame rather than being read as a
+ *    held state like WASD;
+ *  - the report carries the climb (phase, direction, rung) and the hatch in
+ *    reach, so the DOM HUD can say "climbing · rung 4 of 10" and "E — open
+ *    hatch" without the shell re-rendering every frame;
+ *  - movement input is still only accepted while the pointer is captured, but
+ *    the PHYSICS AND THE CLIMB ARE NOT PAUSED by an unlocked pointer: a walker
+ *    dropped mid-deck falls, and a climber mid-storey keeps hold of the ladder.
+ *    Only the keys stop.
  *
  * The rig is logic-only (renders null) and owns no geometry: the interior is
- * mounted beside it (src/player/WalkthroughScene.tsx), and the camera is written
- * from the walker's feet every frame so gravity, collision and the eye can
- * never disagree about where the walker is.
- *
- * `onStep` is reported only when the READABLE state changes (deck, grounded,
- * crouched, failed fall) — not 60 times a second — so the DOM HUD can be plain
- * React state without re-rendering the shell every frame.
+ * mounted beside it (src/player/WalkthroughScene.tsx).
  */
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import { PointerLockControls as PointerLockControlsImpl } from 'three/examples/jsm/controls/PointerLockControls.js'
 import type { Vec3 } from '../types'
 import { registerWalkControls, setWalkLocked } from './controlsStore'
-import { EYE_HEIGHT_M, clampFrameDelta, isLocomotionKey, keysToMoveState } from './move'
 import {
-  spawnWalker,
-  stepWalker,
-  type WalkerState,
-  type WalkerStep,
-  type WalkerWorld,
-} from './walker'
+  EYE_HEIGHT_M,
+  clampFrameDelta,
+  isInteractKey,
+  isNavigationKey,
+  keysToMoveState,
+} from './move'
+import {
+  initialNavState,
+  stepNav,
+  type NavPhase,
+  type NavState,
+  type NavStep,
+} from './nav'
+import type { HatchAction } from './hatch'
+import type { NavigationWorld } from './nav'
 
 /** What the DOM overlay needs off a frame (see the module doc on reporting). */
 export interface WalkReport {
@@ -47,17 +53,32 @@ export interface WalkReport {
   crouched: boolean
   /** True once a fall has been arrested at the bottom of the spine run. */
   arrested: boolean
+  /** 'walk' or 'climb' — which mode the navigation machine is in. */
+  phase: NavPhase
+  /** While climbing: 'up' nose-ward, 'down' toward the drive, null resting. */
+  climbDirection: 'up' | 'down' | null
+  /** While climbing: the rung under the climber's feet (0-based), or null. */
+  rungIndex: number | null
+  /** The hatch the interact key would act on right now, or null. */
+  hatchPromptId: string | null
+  /** What the interact key did on this frame, if anything. */
+  hatchAction: HatchAction | null
 }
 
 /** The readable fields of a step, in the order the report key is built. */
-function reportOf(step: WalkerStep): WalkReport {
+function reportOf(step: NavStep): WalkReport {
   return {
     deckIndex: step.deckIndex,
     deckId: step.deckId,
     deckLabel: step.deckLabel,
-    grounded: step.state.grounded,
+    grounded: step.phase === 'climb' ? true : !step.airborne,
     crouched: step.crouched,
     arrested: step.arrested,
+    phase: step.phase,
+    climbDirection: step.climbDirection,
+    rungIndex: step.rungIndex,
+    hatchPromptId: step.hatchPrompt?.id ?? null,
+    hatchAction: step.hatchAction,
   }
 }
 
@@ -68,6 +89,13 @@ function reportKey(report: WalkReport): string {
     report.grounded ? 'grounded' : 'airborne',
     report.crouched ? 'crouch' : 'stand',
     report.arrested ? 'arrested' : 'ok',
+    report.phase,
+    report.climbDirection ?? 'still',
+    report.rungIndex ?? '-',
+    report.hatchPromptId ?? '-',
+    // The action is a moment, not a state: it must be reported even when
+    // nothing else about the walker changed (opening the hatch you are at).
+    report.hatchAction ?? '-',
   ].join('|')
 }
 
@@ -79,15 +107,15 @@ export function WalkRig({
   onStep,
   onLockChange,
 }: {
-  /** The ship to walk: deck floors + the M3-T3 collision hull. */
-  world: WalkerWorld
+  /** The ship to walk, climb and open: hull, ladder runs and hatch leaves. */
+  world: NavigationWorld
   /** Feet position at spawn, world meters (M3-T6 owns the real selection). */
   spawn: Vec3
   /** Initial camera yaw, radians (0 = facing −z). */
   yaw?: number
-  /** When false the keys are ignored (gravity still runs). Default true. */
+  /** When false the keys are ignored (gravity and the climb still run). */
   enabled?: boolean
-  /** Called when the readable walker state changes (not every frame). */
+  /** Called when the readable navigation state changes (not every frame). */
   onStep?: (report: WalkReport) => void
   /** Lock-state callback (true when the pointer is captured). */
   onLockChange?: (locked: boolean) => void
@@ -98,27 +126,33 @@ export function WalkRig({
   const controls = useMemo(() => new PointerLockControlsImpl(camera), [camera])
 
   const keysRef = useRef<Set<string>>(new Set())
+  const interactRef = useRef(false)
   const lockedRef = useRef(false)
   const enabledRef = useRef(enabled)
   enabledRef.current = enabled
-  const stateRef = useRef<WalkerState>(spawnWalker(spawn))
+  const stateRef = useRef<NavState>(initialNavState(spawn))
   const lastReportRef = useRef<string | null>(null)
   const onStepRef = useRef(onStep)
   onStepRef.current = onStep
   const onLockChangeRef = useRef(onLockChange)
   onLockChangeRef.current = onLockChange
 
-  // Track held locomotion keys. The set is cleared on blur so a keyup that
-  // lands outside the window (alt-tab, devtools) cannot stick a key down.
+  // Track the held locomotion keys and latch the interact press. The held set is
+  // cleared on blur so a keyup that lands outside the window (alt-tab, devtools)
+  // cannot stick a key down.
   useEffect(() => {
     const keys = keysRef.current
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isLocomotionKey(event.code)) {
+      if (isInteractKey(event.code)) {
+        interactRef.current = true
+        return
+      }
+      if (isNavigationKey(event.code)) {
         keys.add(event.code)
       }
     }
     const onKeyUp = (event: KeyboardEvent) => {
-      if (isLocomotionKey(event.code)) {
+      if (isNavigationKey(event.code)) {
         keys.delete(event.code)
       }
     }
@@ -131,6 +165,7 @@ export function WalkRig({
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
       keys.clear()
+      interactRef.current = false
     }
   }, [])
 
@@ -169,33 +204,34 @@ export function WalkRig({
   useEffect(() => {
     camera.rotation.order = 'YXZ'
     camera.rotation.set(0, yaw, 0)
-    stateRef.current = spawnWalker(spawn)
+    stateRef.current = initialNavState(spawn)
     lastReportRef.current = null
     camera.position.set(spawn[0], spawn[1] + EYE_HEIGHT_M, spawn[2])
   }, [camera, spawn, yaw])
 
-  // The frame step: keys → command → walker → camera.
+  // The frame step: keys → command → nav machine → camera.
   useFrame((_state, delta) => {
     const dt = clampFrameDelta(delta)
-    const locomotion =
-      lockedRef.current && enabledRef.current
-        ? keysToMoveState(keysRef.current)
-        : {
-            input: { forward: 0 as const, strafe: 0 as const },
-            sprint: false,
-            crouch: false,
-          }
-    const step = stepWalker(
+    const acceptsInput = lockedRef.current && enabledRef.current
+    const locomotion = acceptsInput
+      ? keysToMoveState(keysRef.current)
+      : {
+          input: { forward: 0 as const, strafe: 0 as const },
+          sprint: false,
+          crouch: false,
+        }
+    // The interact press is edge-triggered and consumed here — a press that
+    // arrives while the pointer is free is dropped, like any other key.
+    const interact = acceptsInput ? interactRef.current : false
+    interactRef.current = false
+
+    const step = stepNav(
       stateRef.current,
-      { ...locomotion, yaw: camera.rotation.y, dt },
+      { ...locomotion, yaw: camera.rotation.y, dt, interact },
       world,
     )
     stateRef.current = step.state
-    camera.position.set(
-      step.state.feet[0],
-      step.state.feet[1] + step.eyeHeightM,
-      step.state.feet[2],
-    )
+    camera.position.set(step.feet[0], step.feet[1] + step.eyeHeightM, step.feet[2])
     const report = reportOf(step)
     const key = reportKey(report)
     if (key !== lastReportRef.current) {

@@ -76,3 +76,42 @@ per module and generate mating geometry from sockets (never freehand)" can be va
    deriving XZ from sockets; vertical socket drift then self-corrects and only authored
    door-height inconsistencies surface as hatch misalignment — which the kit scanner
    (`nonStandardDoors()`) flags at authoring time.
+
+---
+
+## M3-T5 — provisional ladder tuning, awaiting the M0-T4 spike (2026-09-22)
+
+> Not a verdict. The M0-T4 row above stays **pending — human-held (feel)**: the build cron
+> does not run it and records nothing for it. This section exists so the interactive session
+> that eventually runs M0-T4 knows exactly which numbers to retune and which ones are
+> measured and must not be moved.
+
+**Measured (do NOT retune — derived from the assembled ship, in `src/player/ladder.ts`):** the
+run a band carries (rungs = the band's X-moulded cylinders: ten on a 0.3 m pitch, first at
+0.3 m; rails = the storey-tall Y cylinders on the rung line), rung half-depth **0.018 m**,
+ladder half-span **0.225 m**, the lane **`rungHalfDepth + PLAYER_RADIUS + 0.005 = 0.273 m`**
+off the rung line (where the capsule really rests against the rungs — 0 heal fixes, plate
+support equal to the deck floor), the rest-snap radius **half a rung pitch (0.15 m)**, and the
+run's two landings (band *i* climbs deck *i* → deck *i−1*). The climbing **eye** travels the
+0.7 m crawl opening's clear column with **0.077 m** to spare off the plate frame — it is a
+point-lane slide and must stay one.
+
+**Tuning set (the M0-T4 retune targets, all exported constants in `src/player/ladder.ts`):**
+
+| Constant | Value | What the spike judges |
+|---|---|---|
+| `CLIMB_SPEED_M_S` | 1.4 m/s | climb pace — a 3.2 m storey takes 2.3 s |
+| `CLIMB_SPRINT_SPEED_M_S` | 2.0 m/s | Shift; deliberately under the 2.2 m/s walk |
+| `CLIMB_SIDE_SPEED_M_S` | 0.9 m/s | A/D slide along the rungs |
+| `MOUNT_FACING_DOT` | 0.5 (≈60°) | how squarely you must look at the ladder to grab it |
+| `MOUNT_LANE_TOLERANCE_M` | 0.05 m | how far off the lane a grab still takes (the grab snap) |
+| `MOUNT_SPAN_SLACK_M` | 0.1 m | lateral slack past the ladder's own width |
+| `NAV_EYE_CLEARANCE_M` | 0.05 m | the eye-clearance floor `navigationProblems` holds (measured margin 0.077 m) |
+
+**Transitions the spike is really about (feel):** W = up / S = down with the mount decided
+before the walk step (so S at a landing means "the ladder goes down from here"); arrival only
+at the two landings a run connects, and once (a transition, not a per-frame re-report); rest
+snapping onto a rung; the E hatch interaction reached from the lane with the facing test
+waived within **0.5 m** (`HATCH_FACING_WAIVE_M`) so a climber can work the hatch on the deck
+they just arrived at without turning round. Retune feel here; keep the measured geometry, the
+0.9 m door corridor and the crawl-opening clearance untouched (those are invariant-checked).

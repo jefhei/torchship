@@ -75,13 +75,26 @@ export default function Viewport() {
       {ready && locked && (
         <div className="walk-hud" data-testid="walk-hud">
           <span className="walk-hud-keys">
-            WASD move · Shift sprint · Ctrl crouch · ESC release
+            WASD move · Shift sprint · Ctrl crouch · E hatch · ESC release
           </span>
           {walk && (
             <span className="walk-hud-deck" data-testid="walk-deck">
               {walk.deckLabel}
+              {walk.phase === 'climb' ? ' · on the ladder' : ''}
+              {walk.climbDirection !== null ? ` · climbing ${walk.climbDirection}` : ''}
+              {walk.rungIndex !== null ? ` · rung ${walk.rungIndex + 1}` : ''}
               {walk.grounded ? '' : ' · falling'}
               {walk.arrested ? ' · bottom of the shaft' : ''}
+            </span>
+          )}
+          {walk && walk.hatchPromptId !== null && walk.hatchAction === null && (
+            <span className="walk-hud-hatch" data-testid="walk-hatch-prompt">
+              E — open or close this hatch
+            </span>
+          )}
+          {walk?.hatchAction === 'blocked' && (
+            <span className="walk-hud-hatch" data-testid="walk-hatch-blocked">
+              the hatch will not close on you
             </span>
           )}
         </div>

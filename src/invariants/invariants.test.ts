@@ -315,8 +315,22 @@ describe('live checks on the canonical fixtures', () => {
     expect(result.detail).toMatch(/continuous across all 5 decks/)
     expect(result.detail).toContain('crew (deck 1) → head (deck 0)')
     expect(result.detail).toContain('engineering (deck 3)')
+    // M3-T5: the bullet is also checked on the ASSEMBLED ship — the ladder runs
+    // the navigation machine will climb, four of them on Patrol.
+    expect(result.detail).toMatch(
+      /ladder machine climbs it deck to deck \(4 runs, every landing's lane standable/,
+    )
     expect(checkSpineConnectivity(LONG_HAUL_SPEC).status).toBe('pass')
     expect(checkSpineConnectivity(SCIENCE_SPEC).status).toBe('pass')
+  })
+
+  it('spine-connectivity checks the assembled ship, not just the spec', () => {
+    // A spec whose decks are off the canonical grid steps its ladder runs: the
+    // navigation machine measures that on the assembled ship (M3-T5), where the
+    // spec-level seat check alone would not.
+    const stress = checkSpineConnectivity(STRESS_SPEC)
+    expect(stress.detail).toMatch(/off the 3\.2 m deck pitch/)
+    expect(stress.detail).toMatch(/the run steps between the two decks/)
   })
 
   it('spine-connectivity fails the stress rig at the declared defect decks', () => {

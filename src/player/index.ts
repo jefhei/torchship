@@ -6,9 +6,10 @@
  * src/assembler/.
  *
  * Consumers, by milestone:
- *  - M3-T5 ladder/hatch nav: `WalkerState` / `stepWalker` (the climb is a
- *    state-machine layer on top of this frame step) and the deck lookup
- *    (`deckIndexAtY`, `deckLevelAtY`);
+ *  - M3-T5 ladder/hatch nav: `NavigationWorld` / `stepNav` (the composed
+ *    walk-climb-hatch machine), `LadderRun` / `stepClimb` (the ladder half),
+ *    `Hatch` / `toggleHatch` (the leaf half) and `navigationProblems` (the
+ *    assembled ship's half of the §8 spine-connectivity check);
  *  - M3-T6 spawn selection: `WalkerWorld` (deck floors + hull) and the §8
  *    spawn-inside check (`bodyBoxAt`, `blockingBoxes`, `supportHeightAt`);
  *  - M4 lighting/atmosphere: the eye position the practical rig is tuned from
@@ -23,6 +24,9 @@ export * from './gravity'
 export * from './hull'
 export * from './collide'
 export * from './walker'
+export * from './ladder'
+export * from './hatch'
+export * from './nav'
 export * from './spawn'
 export * from './controlsStore'
 export * from './WalkRig'

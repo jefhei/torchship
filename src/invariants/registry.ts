@@ -131,7 +131,7 @@ export const AUTO_INVARIANTS: readonly AutoInvariant[] = [
       'The ladder/crawl run is continuous from the crew deck to the head and to engineering (graph reachability test on the spec).',
     status: 'live',
     owner: 'M1-T3',
-    note: 'Live at M0-T6 as the spec-level run-continuity check: every deck must seat a module flush on the spine band (within the 5 mm hatch cap) on the canonical floor grid, with head / crew / engineering endpoints. M1-T3 refined the seat rule socket-resolved (door centers vs the band socket, src/validation/validator.ts spineConnectivityProblems) — the coarse pose rule and the resolver give identical verdicts on all four fixtures.',
+    note: 'Live at M0-T6 as the spec-level run-continuity check: every deck must seat a module flush on the spine band (within the 5 mm hatch cap) on the canonical floor grid, with head / crew / engineering endpoints. M1-T3 refined the seat rule socket-resolved (door centers vs the band socket, src/validation/validator.ts spineConnectivityProblems) — the coarse pose rule and the resolver give identical verdicts on all four fixtures. M3-T5 added the ASSEMBLED half (checks.ts): the ladder runs the navigation machine will actually climb (src/player/nav.ts navigationProblems) reach every deck from the crew deck, every run tiles at the deck pitch, every landing’s lane is clear of the hull and supported by the plate, and the climbing eye stays off every crawl opening.',
   },
   {
     id: 'collision-match',

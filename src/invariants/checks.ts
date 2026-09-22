@@ -89,12 +89,23 @@ import {
   seamsWatertightProblems,
 } from '../assembler'
 import type { ShipAssembly } from '../assembler'
+// Deliberately the PURE navigation modules rather than the `../player` barrel:
+// this check is spec/assembly logic and must not drag the R3F rig (and a second
+// copy of three) into the invariant harness.
+import { navigationProblems, navigationWorldOf } from '../player/nav'
 
 /**
  * §8 bullet 3 live check. Fails when the spine run is broken at any deck
  * (no seated module → no shaft access; off-grid floor → a step in the run)
  * or an endpoint is missing. Detail lists every problem as a defect-log
  * line; pass detail summarizes the run.
+ *
+ * M3-T5 added the ASSEMBLED half of the bullet, which the spec cannot answer:
+ * the ship's own ladder runs (derived from the spine bands' rungs), the lanes a
+ * climber actually stands in, the camera path up every crawl opening and the
+ * graph walk that reaches every deck — `navigationProblems` (src/player/nav.ts),
+ * run here over the assembled ship so bullet 3 is checked end to end rather
+ * than only as spec geometry.
  */
 export const checkSpineConnectivity: InvariantCheck = (spec: ShipSpec) => {
   const problems: string[] = []
@@ -140,6 +151,23 @@ export const checkSpineConnectivity: InvariantCheck = (spec: ShipSpec) => {
     )
   }
 
+  // The assembled half (M3-T5): climb the ship the machine built. A spec that
+  // cannot assemble reports that instead of throwing — same rule as the
+  // collision check (a rejected rig still gets a verdict, never an exception).
+  let runCount = 0
+  try {
+    const navigation = navigationWorldOf(
+      assembleShip(spec, { requireValidSpec: false }),
+    )
+    runCount = navigation.runs.length
+    problems.push(...navigationProblems(navigation))
+  } catch (error) {
+    problems.push(
+      `the ship cannot be assembled, so its ladder runs cannot be walked: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+
   if (problems.length > 0) {
     return {
       status: 'fail',
@@ -152,7 +180,9 @@ export const checkSpineConnectivity: InvariantCheck = (spec: ShipSpec) => {
     detail:
       `spine run continuous across all ${spec.decks.length} decks (every deck seats a module on the band ` +
       `within ${SEAM_TOLERANCES.hatchAlignMm} mm on the canonical floor grid); crew (deck 1) → head (deck 0) ` +
-      `and crew → engineering (deck ${engDeck}) are reachable along the shaft`,
+      `and crew → engineering (deck ${engDeck}) are reachable along the shaft; the assembled ship's ` +
+      `ladder machine climbs it deck to deck (${runCount} run${runCount === 1 ? '' : 's'}, every landing's ` +
+      `lane standable and the climbing eye clear of every crawl opening)`,
   }
 }
 
