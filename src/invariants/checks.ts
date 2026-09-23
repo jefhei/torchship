@@ -40,12 +40,14 @@
  *    sockets that engage nothing are legal spec (blanked — the real ships'
  *    side doors).
  *
- *  - checkSpawnInsideSpec    (§8 bullet 5, 'spawn-inside', spec facet): the
- *    spawn deck (index 1 by the deck-plan contract — PRD §6 "spawn on the
- *    crew deck at the foot of the spine", M3-T6) exists and hosts a galley
- *    seated at the spine foot. The geometric containment half (spawn point
- *    inside the deck, not intersecting hulls) needs collision geometry and
- *    is M3-T6's.
+ *  - checkSpawnInside        (§8 bullet 5, 'spawn-inside', LIVE at M3-T6):
+ *    the spec facet (live since M0-T6) requires the spawn deck — index 1 by
+ *    the deck-plan contract, PRD §6 "spawn on the crew deck at the foot of
+ *    the spine" — to exist and to host a galley seated at the spine foot;
+ *    M3-T6 added the geometric half, measured on the ASSEMBLED ship: the
+ *    spawn the walker is really dropped at (src/player/spawn.ts) lies inside
+ *    a module instance of the crew deck, stands on the deck plate, and is
+ *    clear of the hull and of every shut hatch leaf.
  *
  *  - checkCollisionMatch     (§8 bullet 4, 'collision-match', LIVE at
  *    M3-T3): the deck hull is the modules' own collision hints placed (one box
@@ -89,10 +91,11 @@ import {
   seamsWatertightProblems,
 } from '../assembler'
 import type { ShipAssembly } from '../assembler'
-// Deliberately the PURE navigation modules rather than the `../player` barrel:
-// this check is spec/assembly logic and must not drag the R3F rig (and a second
-// copy of three) into the invariant harness.
+// Deliberately the PURE navigation/spawn modules rather than the `../player`
+// barrel: these checks are spec/assembly logic and must not drag the R3F rig
+// (and a second copy of three) into the invariant harness.
 import { navigationProblems, navigationWorldOf } from '../player/nav'
+import { chooseSpawn, spawnLabel } from '../player/spawn'
 
 /**
  * §8 bullet 3 live check. Fails when the spine run is broken at any deck
@@ -187,42 +190,84 @@ export const checkSpineConnectivity: InvariantCheck = (spec: ShipSpec) => {
 }
 
 /**
- * §8 bullet 5 live check — the spec facet. Fails when the crew/spawn deck
- * (index 1) is missing, does not host a galley, or the galley is not seated
- * at the spine foot. The containment half (spawn point inside the deck,
- * clear of hulls) is M3-T6's and is called out in the pass detail.
+ * §8 bullet 5, the SPEC facet (live since M0-T6). Fails when the crew/spawn
+ * deck (index 1) is missing, does not host a galley, or the galley is not
+ * seated at the spine foot — i.e. when the ship has no spine foot to spawn at,
+ * before any geometry is involved. Empty means the deck plan is spawnable.
  */
-export const checkSpawnInsideSpec: InvariantCheck = (spec: ShipSpec) => {
+export function spawnInsideSpecProblems(spec: ShipSpec): string[] {
   if (spec.decks.length < 2) {
-    return {
-      status: 'fail',
-      detail:
-        `spec has ${spec.decks.length} deck${spec.decks.length === 1 ? '' : 's'} — the crew/spawn deck ` +
+    return [
+      `spec has ${spec.decks.length} deck${spec.decks.length === 1 ? '' : 's'} — the crew/spawn deck ` +
         `(index 1, by the deck-plan contract) does not exist`,
-    }
+    ]
   }
   const crew = spec.decks[1]
   const galley = crew.modules.find((m) => m.moduleId === 'galley')
   if (!galley) {
-    return {
-      status: 'fail',
-      detail:
-        `crew/spawn deck (index 1, "${crew.id}") does not host a galley module — spawn is defined at the ` +
+    return [
+      `crew/spawn deck (index 1, "${crew.id}") does not host a galley module — spawn is defined at the ` +
         `foot of the spine on the crew deck`,
-    }
+    ]
   }
   const seatProblems = moduleSeatProblems(galley)
   if (seatProblems.length > 0) {
+    return [
+      `spawn deck galley is not seated at the spine foot: ${seatProblems.join('; ')}`,
+    ]
+  }
+  return []
+}
+
+/**
+ * §8 bullet 5 live check (the geometric half went live at M3-T6). "The spawn
+ * point is inside the crew deck, not intersecting geometry" is answered in two
+ * halves that must agree on the same deck:
+ *
+ *  - the SPEC facet (`spawnInsideSpecProblems`): the crew deck exists and seats
+ *    a galley at the spine foot — the deck the spawn is defined on;
+ *  - the ASSEMBLED facet (M3-T6, src/player/spawn.ts): `chooseSpawn` derives the
+ *    spawn poses from the crew deck's own geometry (the room's spine doorway,
+ *    the ladder run rising off the deck) and measures the chosen one against the
+ *    hull the walker is solved against — inside a module instance of the crew
+ *    deck, standing on the deck plate, out of every hull box and clear of every
+ *    SHUT hatch leaf (the spawn state: the navigation machine starts with no
+ *    hatch open). The point the invariant proves is the point the app mounts the
+ *    rig at (WalkthroughScene), so the check cannot drift from the game.
+ *
+ * A ship whose crew deck offers no legal pose fails with the measured reasons
+ * (per candidate) instead of dropping the player inside a bulkhead. Like the
+ * seams and collision checks it assembles the spec itself with the validator
+ * gate off, so a REJECTED rig still gets a verdict rather than an exception.
+ */
+export const checkSpawnInside: InvariantCheck = (spec: ShipSpec) => {
+  const specProblems = spawnInsideSpecProblems(spec)
+  if (specProblems.length > 0) {
+    return { status: 'fail', detail: specProblems.join('; ') }
+  }
+  const crew = spec.decks[1]
+  const specDetail = `crew/spawn deck (index 1, "${crew.id}") hosts a galley seated on the spine band`
+
+  try {
+    const ship = assembleShip(spec, { requireValidSpec: false })
+    const choice = chooseSpawn(ship, navigationWorldOf(ship))
+    if (choice.point === null) {
+      return { status: 'fail', detail: choice.problems.join('; ') }
+    }
+    return {
+      status: 'pass',
+      detail:
+        `${specDetail}; the assembled ship spawns the walker ${spawnLabel(choice.point)}, ` +
+        `measured against the hull the walker is solved against (every deck's boxes plus ` +
+        `every SHUT hatch leaf \u2014 the spawn state)`,
+    }
+  } catch (error) {
     return {
       status: 'fail',
-      detail: `spawn deck galley is not seated at the spine foot: ${seatProblems.join('; ')}`,
+      detail:
+        `the ship cannot be assembled, so its spawn cannot be measured: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
     }
-  }
-  return {
-    status: 'pass',
-    detail:
-      `crew/spawn deck (index 1, "${crew.id}") hosts a galley seated on the spine band — the spawn point's ` +
-      `geometric containment (inside the deck, clear of hulls) is M3-T6's half of this invariant`,
   }
 }
 
@@ -467,6 +512,6 @@ export const LIVE_CHECKS: Partial<Record<InvariantId, InvariantCheck>> = {
   'hatch-alignment': checkHatchAlignment,
   'spine-connectivity': checkSpineConnectivity,
   'collision-match': checkCollisionMatch,
-  'spawn-inside': checkSpawnInsideSpec,
+  'spawn-inside': checkSpawnInside,
   'room-lit': checkRoomLit,
 }

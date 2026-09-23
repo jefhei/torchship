@@ -11,11 +11,13 @@
  * meshes with merged geometry + InstancedMesh behind the SAME node ids; this
  * component is the seam that lets that swap happen without touching the rig.
  *
- * `WalkthroughScene` adds the rig (WalkRig.tsx) at the provisional spawn
- * (`defaultSpawnFeet`, spawn.ts — M3-T6 owns the real selection) and the
- * navigation world derived from the assembly (`navigationWorldOf` — deck floors,
- * the M3-T3 hull, the M3-T5 ladder runs and the modules' own hatch leaves,
- * never re-derived).
+ * `WalkthroughScene` adds the rig (WalkRig.tsx) at the M3-T6 spawn
+ * (`spawnPointOf` — the crew deck at the foot of the spine, measured against
+ * the same hull the walker is solved against) and the navigation world derived
+ * from the assembly (`navigationWorldOf` — deck floors, the M3-T3 hull, the
+ * M3-T5 ladder runs and the modules' own hatch leaves, never re-derived). The
+ * spawn's yaw comes with it, so the player starts looking where the selection
+ * says they should (into the crew room, or at the ladder).
  */
 
 import { useMemo } from 'react'
@@ -23,7 +25,7 @@ import type { ShipAssembly } from '../assembler'
 import { KitParts } from '../kit/render'
 import { WalkRig, type WalkReport } from './WalkRig'
 import { navigationWorldOf } from './nav'
-import { defaultSpawnFeet } from './spawn'
+import { spawnPointOf } from './spawn'
 
 /** Every deck of the assembled ship, drawn from the scene-graph contracts. */
 export function ShipInterior({ assembly }: { assembly: ShipAssembly }) {
@@ -59,13 +61,19 @@ export function WalkthroughScene({
   onStep?: (report: WalkReport) => void
 }) {
   const world = useMemo(() => navigationWorldOf(assembly), [assembly])
-  const spawn = useMemo(() => defaultSpawnFeet(assembly), [assembly])
+  const spawn = useMemo(() => spawnPointOf(assembly, world), [assembly, world])
 
   return (
     <>
       <ShipInterior assembly={assembly} />
       {spawn !== null && (
-        <WalkRig world={world} spawn={spawn} enabled={enabled} onStep={onStep} />
+        <WalkRig
+          world={world}
+          spawn={spawn.feet}
+          yaw={spawn.yaw}
+          enabled={enabled}
+          onStep={onStep}
+        />
       )}
     </>
   )

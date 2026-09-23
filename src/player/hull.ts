@@ -166,8 +166,9 @@ export function bodyBoxAt(feet: Vec3, shape: WalkerShape): Aabb3 {
 }
 
 /**
- * The hull's own bounding box, or undefined for an empty hull. The world model
- * uses it as the last-resort spawn fallback (M3-T6 owns the real selection).
+ * The hull's own bounding box, or undefined for an empty hull. Reporting only —
+ * the walkthrough's spawn comes from the M3-T6 selection (`src/player/spawn.ts`),
+ * which never needs a bounding box.
  */
 export function hullBounds(hull: readonly Aabb3[]): Aabb3 | undefined {
   if (hull.length === 0) {

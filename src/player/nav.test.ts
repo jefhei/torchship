@@ -15,15 +15,17 @@ import {
 } from './nav'
 import { EYE_HEIGHT_M, STEP_HEIGHT_M } from './move'
 import { MOUNT_LANE_TOLERANCE_M } from './ladder'
-import { defaultSpawnFeet } from './spawn'
+import { spawnPointOf } from './spawn'
 
 const DT = 0.05
 const assembly = assembleShip(PATROL_SPEC)
 const world = navigationWorldOf(assembly)
-const spawn = defaultSpawnFeet(assembly)
-if (spawn === null) {
+// The M3-T6 spawn — the same selection the app mounts the rig at.
+const spawnPoint = spawnPointOf(assembly, world)
+if (spawnPoint === null) {
   throw new Error('nav.test: the Patrol ship has no crew-deck spawn')
 }
+const spawn = spawnPoint.feet
 const CREW = 1
 const HEAD = 0
 const OPS = 2
@@ -265,7 +267,11 @@ describe('hatches and the walker together (M3-T5)', () => {
   })
 
   it('does not make a hatch a floor: a fall still lands on the deck plate', () => {
-    const dropped = initialNavState([spawn[0], CREW_FLOOR_Y + 2, spawn[2]])
+    // Dropped 1 m above the plate at the M3-T6 spawn column, not 2: the deck's
+    // clear height is 3.0 m and the walker's body band is 1.8 m, so a 2 m start
+    // puts the body INSIDE the deck above's plate slab and the heal pass moves
+    // the walker out of it (measured: 17 fixes) before they ever fall.
+    const dropped = initialNavState([spawn[0], CREW_FLOOR_Y + 1, spawn[2]])
     const { state, steps } = hold(dropped, command(), 60)
     const landed = steps.find((step) => step.landed)
     expect(landed).toBeDefined()

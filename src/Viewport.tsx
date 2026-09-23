@@ -15,8 +15,9 @@ import {
  *
  * The `<Canvas>` now carries the assembled Patrol ship (M3-T1's scene graph,
  * drawn by the M2 part renderer) and the first-person rig (M3-T4): a walker is
- * dropped on the crew deck's first room, under-burn gravity pulls it toward the
- * drive, and the WASD keys drive it through the M3-T3 collision hull.
+ * dropped at the M3-T6 spawn — the crew deck at the foot of the spine, facing
+ * into the galley — under-burn gravity pulls it toward the drive, and the WASD
+ * keys drive it through the M3-T3 collision hull.
  *
  * Walking is the app's only camera mode — there is no orbit rig to swap to — so
  * the rig is always mounted and the DOM overlay is the whole walkthrough UI: a

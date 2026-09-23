@@ -41,7 +41,7 @@ import {
   checkRoomLit,
   checkSeamsWatertight,
   checkSpineConnectivity,
-  checkSpawnInsideSpec,
+  checkSpawnInside,
   deckGridErrorMm,
   deckHosts,
   deckSeatSummary,
@@ -83,6 +83,8 @@ import {
 import { assemblyParts } from '../kit/modules/types'
 import { partsBounds } from '../kit/parts'
 import { assembleShip, collisionProblems } from '../assembler'
+import { navigationWorldOf } from '../player/nav'
+import { spawnPointOf, spawnProblems } from '../player/spawn'
 
 /* ---------- helpers ------------------------------------------------ */
 
@@ -376,14 +378,34 @@ describe('live checks on the canonical fixtures', () => {
 
   it('spawn-inside (spec facet) passes on the real ships', () => {
     for (const f of expectValidFixtures()) {
-      const result = checkSpawnInsideSpec(f.spec)
+      const result = checkSpawnInside(f.spec)
       expect(result.status).toBe('pass')
       expect(result.detail).toMatch(/hosts a galley seated on the spine band/)
+      // …and the assembled half (M3-T6): the spawn the walker is really
+      // dropped at, measured against the ship's own hull.
+      expect(result.detail).toMatch(
+        /the assembled ship spawns the walker \(-?\d+\.\d{3}, -?\d+\.\d{3}, -?\d+\.\d{3}\) m inside the "galley" module#0/,
+      )
+      expect(result.detail).toMatch(
+        /measured against the hull the walker is solved against.*every SHUT hatch leaf/,
+      )
     }
   })
 
+  it('spawn-inside measures the assembled spawn on a synthetic ship too', () => {
+    // The assembled half is real logic on any spec, not just the fixtures (the
+    // ship-level failure injections live in src/player/spawn.test.ts, where the
+    // hull can be sabotaged directly).
+    const assembly = assembleShip(CANONICAL_THREE, { requireValidSpec: false })
+    const world = navigationWorldOf(assembly)
+    expect(spawnProblems(assembly, world)).toEqual([])
+    const point = spawnPointOf(assembly, world)
+    expect(point?.kind).toBe('doorway')
+    expect(point?.verdict.onPlate).toBe(true)
+  })
+
   it('spawn-inside fails the stress rig (no galley crew deck at index 1)', () => {
-    const result = checkSpawnInsideSpec(STRESS_SPEC)
+    const result = checkSpawnInside(STRESS_SPEC)
     expect(result.status).toBe('fail')
     expect(result.detail).toMatch(
       /crew\/spawn deck \(index 1, "rig-1"\) does not host a galley/,
@@ -399,7 +421,7 @@ describe('live checks on synthetic mini-specs (not fixture-shaped)', () => {
     expect(result.status).toBe('pass')
     expect(result.detail).toMatch(/continuous across all 3 decks/)
     expect(result.detail).toContain('engineering (deck 2)')
-    expect(checkSpawnInsideSpec(CANONICAL_THREE).status).toBe('pass')
+    expect(checkSpawnInside(CANONICAL_THREE).status).toBe('pass')
     expect(checkHatchAlignment(CANONICAL_THREE).status).toBe('pass')
   })
 
@@ -448,7 +470,7 @@ describe('live checks on synthetic mini-specs (not fixture-shaped)', () => {
     const spine = checkSpineConnectivity(broken)
     expect(spine.status).toBe('fail')
     expect(spine.detail).toContain('galley spine-door center is 25.0 mm off')
-    const spawn = checkSpawnInsideSpec(broken)
+    const spawn = checkSpawnInside(broken)
     expect(spawn.status).toBe('fail')
     expect(spawn.detail).toMatch(/spawn deck galley is not seated at the spine foot/)
   })
@@ -465,7 +487,7 @@ describe('live checks on synthetic mini-specs (not fixture-shaped)', () => {
     const spine = checkSpineConnectivity(single)
     expect(spine.status).toBe('fail')
     expect(spine.detail).toMatch(/no crew deck at index 1/)
-    const spawn = checkSpawnInsideSpec(single)
+    const spawn = checkSpawnInside(single)
     expect(spawn.status).toBe('fail')
     expect(spawn.detail).toContain('the crew/spawn deck (index 1')
   })

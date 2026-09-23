@@ -28,15 +28,18 @@ import {
 import { EYE_HEIGHT_M, WALK_SPEED_M_S } from './move'
 import { navigationWorldOf, type NavigationWorld } from './nav'
 import { WalkRig, type WalkReport } from './WalkRig'
-import { defaultSpawnFeet } from './spawn'
+import { spawnPointOf } from './spawn'
 import type { WalkerWorld } from './walker'
 
 const assembly = assembleShip(PATROL_SPEC)
 const world = navigationWorldOf(assembly)
-const spawn = defaultSpawnFeet(assembly)
-if (spawn === null) {
+// The M3-T6 spawn, as WalkthroughScene mounts the rig; the tests drive the rig
+// with the default yaw (0) through their own command helpers.
+const spawnPoint = spawnPointOf(assembly, world)
+if (spawnPoint === null) {
   throw new Error('WalkRig.test: the Patrol ship has no crew-deck spawn')
 }
+const spawn = spawnPoint.feet
 const CREW_FLOOR_Y = world.walker.decks[1].floorY
 
 let camera: THREE.PerspectiveCamera
@@ -289,10 +292,13 @@ describe('WalkRig (M3-T4 first-person rig)', () => {
   })
 })
 
-describe('the provisional spawn (M3-T4 plumbing for M3-T6)', () => {
-  it('drops the walker into the crew deck’s first room, on its floor', () => {
-    expect(spawn[1]).toBeCloseTo(CREW_FLOOR_Y, 10)
+describe('the M3-T6 spawn the rig is mounted at', () => {
+  it('drops the walker into the crew deck’s room at the foot of the spine', () => {
     expect(spawn[0]).toBe(0)
+    expect(spawn[1]).toBeCloseTo(CREW_FLOOR_Y, 10)
+    // Inside the room, past the spine wall (the galley's spine door is at 0.7 m).
+    expect(spawn[2]).toBeGreaterThan(0.7)
+    expect(spawnPoint.kind).toBe('doorway')
     expect(world.walker.decks.map((deck) => deck.deckId)).toEqual([
       'head',
       'crew',
@@ -300,6 +306,12 @@ describe('the provisional spawn (M3-T4 plumbing for M3-T6)', () => {
       'engineering',
       'aft',
     ])
+  })
+
+  it('honours the spawn yaw the selection hands it (facing into the room)', () => {
+    render(<WalkRig world={world} spawn={spawn} yaw={spawnPoint.yaw} />)
+    expect(camera.rotation.y).toBe(spawnPoint.yaw)
+    expect(spawnPoint.yaw).toBeCloseTo(Math.PI, 12)
   })
 })
 

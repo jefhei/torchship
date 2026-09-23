@@ -109,7 +109,7 @@ export function WalkRig({
 }: {
   /** The ship to walk, climb and open: hull, ladder runs and hatch leaves. */
   world: NavigationWorld
-  /** Feet position at spawn, world meters (M3-T6 owns the real selection). */
+  /** Feet position at spawn, world meters (the M3-T6 selection, src/player/spawn.ts). */
   spawn: Vec3
   /** Initial camera yaw, radians (0 = facing −z). */
   yaw?: number

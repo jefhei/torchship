@@ -151,7 +151,7 @@ export const AUTO_INVARIANTS: readonly AutoInvariant[] = [
     requirement: 'The spawn point is inside the crew deck, not intersecting geometry.',
     status: 'live',
     owner: 'M3-T6',
-    note: 'Spec facet live at M0-T6: the spawn deck (index 1, by the deck-plan contract) exists and hosts a galley seated at the foot of the spine. The geometric containment half (inside the deck, clear of hulls) needs collision hulls and is M3-T6\u2019s.',
+    note: 'Spec facet live at M0-T6, geometric half live at M3-T6 (checks.ts checkSpawnInside): the spawn deck (index 1, by the deck-plan contract \u2014 PRD \u00a76 \u201cspawn on the crew deck at the foot of the spine\u201d) must exist and host a galley seated at the spine foot, AND the ASSEMBLED ship must actually offer a legal spawn (src/player/spawn.ts chooseSpawn): the candidate poses are derived from the crew deck\u2019s own geometry (the room\u2019s spine-door socket, the ladder run rising off the deck) and the chosen one is measured against the hull the walker is solved against \u2014 inside a module instance of the crew deck, standing on the deck plate, out of every hull box and clear of every shut hatch leaf. The point this check proves is the point the app mounts the rig at (WalkthroughScene), so the invariant cannot drift from the game.',
   },
   {
     id: 'room-lit',
