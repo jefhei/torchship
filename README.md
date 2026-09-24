@@ -51,6 +51,21 @@ annulus, bite past both wall planes, and a clear pass-through — and that measu
 bullet 1 `[auto]` invariant (`seams-watertight`, live at M3-T2 in the M0-T6 harness via
 `checkSeamsWatertight`). `seamTally()` / `seamsWatertightProblems()` are the report surface.
 
+## Draw calls (M3-T7)
+
+The deck geometry partition the assembler emits (`groups` = merged per-slot geometry, `batches` =
+instanced moulds) is exactly the draw-call plan: `src/player/deckGeometry.ts` builds ONE merged
+`BufferGeometry` per group and ONE mould + placements per batch, and `ShipInterior`
+(`src/player/WalkthroughScene.tsx`) mounts one mesh / one `InstancedMesh` for each. Before M3-T7
+the decks were drawn one mesh per part (736 calls on Patrol); now Patrol draws **179 calls for 736
+parts**, Vagabond 213, Surveyor 181, the QA rig 194 — all under the PRD §10 ceiling of **250**
+(`DRAW_CALL_CEILING`, `src/assembler/drawCalls.ts`). `drawCallTally()` / `drawCallProblems()` are
+the report surface, the ceiling is checked by the assembler gate (rule 12), and the numbers above
+are pinned on every deck of all four ships in `src/assembler/drawCalls.test.ts` +
+`src/player/deckGeometry.test.ts` (which also proves each instanced mould + placement reproduces
+its world part, so the swap cannot move geometry). The `minInstances` assembler option is the one
+knob that trades calls for instancing.
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every

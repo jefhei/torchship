@@ -4,12 +4,18 @@
  *
  * `ShipInterior` draws what the assembler emitted, deck by deck, straight from
  * the M3-T1 scene-graph contracts: every deck node's merged groups and instanced
- * batches are rendered through the M2 part renderer (`KitParts`, one mesh per
- * part) under deck groups named `deck-${deckIndex}` — the export contract's
- * naming (src/types/scene.ts), so the tree the walker walks is already shaped
- * like the tree M6 exports. The M3-T7 draw-call pass replaces the per-part
- * meshes with merged geometry + InstancedMesh behind the SAME node ids; this
- * component is the seam that lets that swap happen without touching the rig.
+ * batches render as ONE mesh each under deck groups named `deck-${deckIndex}` —
+ * the export contract's naming (src/types/scene.ts), so the tree the walker
+ * walks is already shaped like the tree M6 exports.
+ *
+ * **M3-T7 (this pass) is the merge/instance swap.** Until M3-T7 the decks were
+ * drawn one mesh per part (736 calls on Patrol). Now each deck's geometry is
+ * built ONCE per deck by `deckDrawPlan` (src/player/deckGeometry.ts — one
+ * merged `BufferGeometry` per slot group, one mould + placements per instance
+ * batch) and mounted as exactly `groups + batches` meshes, which is the number
+ * `drawCallTally` measures against the §10 ceiling (src/assembler/drawCalls.ts).
+ * The plan is memoised on the deck (re-renders — every HUD step — must not
+ * re-merge the geometry) and disposed on unmount.
  *
  * `WalkthroughScene` adds the rig (WalkRig.tsx) at the M3-T6 spawn
  * (`spawnPointOf` — the crew deck at the foot of the spine, measured against
@@ -20,30 +26,55 @@
  * says they should (into the crew room, or at the ladder).
  */
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { ShipAssembly } from '../assembler'
-import { KitParts } from '../kit/render'
+import type { DeckAssembly } from '../assembler'
+import { InstancedParts, MergedParts } from '../kit/render'
 import { WalkRig, type WalkReport } from './WalkRig'
+import { deckDrawPlan, disposeDrawPlan } from './deckGeometry'
 import { navigationWorldOf } from './nav'
 import { spawnPointOf } from './spawn'
+
+/**
+ * One deck's draw calls: the M3-T7 merge/instance pass (one mesh per merged
+ * slot group, one InstancedMesh per instance batch), named by the scene graph's
+ * own ids. Nothing is built per frame or per re-render — the plan is memoised
+ * on the deck (the assembly is stable) and freed when it goes away.
+ */
+function DeckGeometry({ deck }: { deck: DeckAssembly }) {
+  const plan = useMemo(() => deckDrawPlan(deck), [deck])
+  useEffect(() => () => disposeDrawPlan(plan), [plan])
+
+  return (
+    <group name={`deck-${deck.deckIndex}`}>
+      {plan.map((call) =>
+        call.kind === 'merged' ? (
+          <MergedParts
+            key={call.id}
+            id={call.id}
+            slot={call.materialSlot}
+            geometry={call.geometry}
+          />
+        ) : (
+          <InstancedParts
+            key={call.id}
+            id={call.id}
+            slot={call.materialSlot}
+            geometry={call.geometry}
+            placements={call.placements}
+          />
+        ),
+      )}
+    </group>
+  )
+}
 
 /** Every deck of the assembled ship, drawn from the scene-graph contracts. */
 export function ShipInterior({ assembly }: { assembly: ShipAssembly }) {
   return (
     <group name="ship-interior">
       {assembly.decks.map((deck) => (
-        <group key={deck.deckId} name={`deck-${deck.deckIndex}`}>
-          {deck.groups.map((plan) => (
-            <group key={plan.group.id} name={plan.group.id}>
-              <KitParts parts={plan.parts.map((placed) => placed.part)} />
-            </group>
-          ))}
-          {deck.batches.map((plan) => (
-            <group key={plan.batch.id} name={plan.batch.id}>
-              <KitParts parts={plan.parts.map((placed) => placed.part)} />
-            </group>
-          ))}
-        </group>
+        <DeckGeometry key={deck.deckId} deck={deck} />
       ))}
     </group>
   )

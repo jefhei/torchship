@@ -39,7 +39,10 @@
  *    to the join's own along-normal channel; exactly one plan per blanked
  *    socket, and every socket that nothing else seals is plugged (a blanked
  *    doorway left open is a hole in the hull); and every seal's own measured
- *    problems (coverage, bite, passage, plug depth) are surfaced verbatim.
+ *    problems (coverage, bite, passage, plug depth) are surfaced verbatim;
+ *  - the draw calls stay under the §10 ceiling (M3-T7): one call per merged
+ *    slot group + one per instanced batch, summed per deck and per ship — the
+ *    renderer draws exactly that partition (drawCalls.ts).
  */
 
 import type { Aabb3, DeckNode, MaterialSlot } from '../types'
@@ -50,6 +53,7 @@ import { placePart } from '../kit/modules/placement'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import { DEFAULT_MIN_INSTANCES, mouldOf, placementFor } from './batches'
 import { collisionProblems, deckHull, hullLabel } from './collision'
+import { drawCallProblems } from './drawCalls'
 import { joinLabel, spineJoinOf } from './joins'
 import { boxContains, isWellFormedBox, transformAabb, worldOriginOf } from './place'
 import { placedPartsOf } from './assemble'
@@ -532,6 +536,11 @@ export function assemblyProblems(
   // placed + the generated solid seam parts, complete, matching the visible
   // geometry within the §8 bullet-4 cap, and clear of every pass-through.
   problems.push(...collisionProblems(ship))
+
+  // 12. The draw-call pass (M3-T7): one call per merged slot group + one per
+  // instanced batch, under the §10 ceiling (drawCalls.ts measures the
+  // partition the renderer draws — see src/player/deckGeometry.ts).
+  problems.push(...drawCallProblems(ship))
 
   return problems
 }

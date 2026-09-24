@@ -16,7 +16,10 @@
  *    (`eyePosition`, `eyeHeightFor`) and the walker's deck;
  *  - M5 scripted review walks: `stepWalker` driven headlessly on a recorded
  *    command sequence — the coffee run is a `WalkerCommand[]` plus the
- *    M0 fixtures.
+ *    M0 fixtures;
+ *  - M3-T7 draw calls: `deckDrawPlan` / `disposeDrawPlan` (deckGeometry.ts —
+ *    the geometry the renderer issues, one mesh per merged group and per
+ *    instanced batch; measured by src/assembler/drawCalls.ts).
  */
 
 export * from './move'
@@ -28,6 +31,7 @@ export * from './ladder'
 export * from './hatch'
 export * from './nav'
 export * from './spawn'
+export * from './deckGeometry'
 export * from './controlsStore'
 export * from './WalkRig'
 export * from './WalkthroughScene'
