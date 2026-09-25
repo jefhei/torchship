@@ -337,6 +337,29 @@ describe('kit harness: injected defects are caught', () => {
     )
   })
 
+  it('catches a drawn slot whose theme points at a set the registry does not know (M4-T1)', () => {
+    const bogus: MaterialTheme = {
+      ...THEME,
+      slots: { ...THEME.slots, ceramic: { set: 'ceramic-plasma-shield' } },
+    }
+    const engineering = getAuthoredModule('engineering')
+    const problems = moduleSlotProblems(engineering, bogus)
+    expect(problems).toHaveLength(1)
+    expect(problems[0]).toMatch(
+      /drawn slot 'ceramic' does not resolve in theme 'firebrand' — slot 'ceramic' names PBR set 'ceramic-plasma-shield', which the registry does not know/,
+    )
+    // …and a set declared for ANOTHER slot is refused too.
+    const crossTalk: MaterialTheme = {
+      ...THEME,
+      slots: { ...THEME.slots, ceramic: { set: 'hazard-striping-worn' } },
+    }
+    expect(moduleSlotProblems(engineering, crossTalk)[0]).toMatch(
+      /which is declared for slot 'hazard'/,
+    )
+    // The clean theme still passes — the rule is not tautological.
+    expect(moduleSlotProblems(engineering, THEME)).toEqual([])
+  })
+
   it('catches a module with no standalone render component', () => {
     const withoutSpine: Record<string, ModuleComponent> = { ...MODULE_COMPONENTS }
     delete withoutSpine.spine

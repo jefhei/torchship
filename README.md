@@ -66,6 +66,22 @@ are pinned on every deck of all four ships in `src/assembler/drawCalls.test.ts` 
 its world part, so the swap cannot move geometry). The `minInstances` assembler option is the one
 knob that trades calls for instancing.
 
+## Material sets (M4-T1)
+
+`src/materials/pbr.ts` authors the **nine PBR sets** — one per §4 slot — that the theme's slot
+payloads resolve to: diamond-pattern deck plate, brushed/scuffed painted steel, copper-and-rust
+pipe runs, recessed practical-light lenses, glass/acrylic screens, worn hazard striping, ceramic
+heat shielding, canvas webbing, and the single warm accent reserved for the coffee station. A set
+carries exactly what `meshStandardMaterial` spends (base albedo, metalness, roughness, plus an
+emissive tint + strength for the light slots); worn-ness lives in `roughness`, bounded by
+`PBR_MIN_ROUGHNESS` ("no gloss", PRD §4) and `PBR_EMISSIVE_INTENSITY_MAX` ("no blown-out panels").
+The gates now check resolution as well as assignment: `themeProblems` fails the build on a set id
+the registry does not know or one declared for another slot, and `npm run check:slots` asserts the
+registry covers every slot exactly once. `src/kit/render/slotSurfaces.ts` is the slot → shading
+bridge (theme-driven, no colour left in the kit) and `materialSetReport(ship)` reports per-slot
+parts + draw calls for an assembled ship. Measured: all four canonical ships draw **9/9 slots**
+(Patrol 736 parts / 179 calls shaded from theme `firebrand`).
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every

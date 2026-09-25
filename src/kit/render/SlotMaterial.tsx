@@ -1,9 +1,11 @@
 /**
- * M2-T1 — the slot → surface bridge.
+ * M2-T1 (bridged to the M4-T1 PBR sets).
  *
  * Every kit part carries a §4 slot NAME, never a raw material. This is the one
- * place that name becomes a material: M4-T1 swaps the interim tints in
- * slotSurfaces.ts for real PBR sets and nothing else in the kit changes.
+ * place that name becomes a material: `slotSurface` (./slotSurfaces.ts) resolves
+ * the slot through the ship's material theme into the authored PBR set — the
+ * M4-T1 sets, one per §4 slot — so every module in every deck is shaded from
+ * the same table and no module ever names a colour.
  *
  * The material carries the slot name as its three.js `name` (M2-T7): the kit
  * harness reads it back off the render tree to prove every drawn mesh resolves

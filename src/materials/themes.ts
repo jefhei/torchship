@@ -6,8 +6,11 @@
  * (`assertThemesComplete`, run by `npm run build` + CI) and, later, the source
  * the M6 export maps to named glTF materials.
  *
- * Slot payloads are `MaterialSlotSpec` — interim ids M4-T1 resolves to real PBR
- * sets. Swapping a set id here is the whole edit; nothing else re-derives.
+ * Slot payloads are `MaterialSlotSpec`: the id of the PBR set the slot resolves
+ * to. Those sets are authored in `./pbr.ts` (`PBR_SETS`, M4-T1) and the theme
+ * gate (`themeProblems`) now refuses an id the registry does not know or that is
+ * declared for another slot — so swapping a set id here is the whole edit
+ * (nothing else re-derives) and a typo fails the build instead of the renderer.
  */
 
 import type { MaterialTheme, MaterialSlotSpec } from './theme.ts'
@@ -17,8 +20,9 @@ import type { MaterialSlots } from '../types/materials.ts'
 export const DEFAULT_THEME_ID = 'firebrand'
 
 /**
- * Set ids, per §4 material vocabulary. Named once so M4-T1 can author exactly
- * these sets and M2 modules can reference the slots, never the raw ids.
+ * Set ids, per §4 material vocabulary. Named once so the M4-T1 registry
+ * (`./pbr.ts`) authors exactly these sets and M2 modules reference the SLOTS,
+ * never the raw ids.
  */
 const FIREBRAND_SETS: MaterialSlots<MaterialSlotSpec> = {
   deckplate: { set: 'deckplate-diamond-cable-runs' },
@@ -50,3 +54,6 @@ export function getMaterialTheme(id: string): MaterialTheme {
   }
   return theme
 }
+
+/** The ship's standard theme — the one every module is authored against. */
+export const DEFAULT_MATERIAL_THEME: MaterialTheme = MATERIAL_THEMES[0]

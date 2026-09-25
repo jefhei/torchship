@@ -14,7 +14,10 @@
  *    against the fixture-time CONTRACT_KIT socket origins),
  *  - the slot rule is the M1-T4 `themeAssignsSlot` query over the M1-T2 slot
  *    vocabulary (an unassigned slot is already a failed build — this asks the
- *    same question per module),
+ *    same question per module), PLUS the M4-T1 resolution rule: an assigned slot
+ *    must name a PBR set the registry knows and that is declared for that slot,
+ *    so "the module draws materials the renderer can actually shade" is asked
+ *    per module too,
  *  - the render rule compares the ACTUAL render tree (renderTree.ts) against the
  *    module's own parts, so a module cannot ship a mesh its geometry does not
  *    describe (or hide geometry behind a missing mesh).
@@ -24,6 +27,7 @@ import type { Facing, KitManifest, Vec3 } from '../../types'
 import { MM } from '../../types'
 import type { MaterialTheme } from '../../materials/theme'
 import { themeAssignsSlot } from '../../materials/theme'
+import { slotSetProblems } from '../../materials/pbr'
 import { moduleMaterialSlots, moduleParts } from '../modules/types'
 import type { AuthoredModule } from '../modules/types'
 import type { ModuleComponent } from './components'
@@ -49,7 +53,10 @@ export interface DoorSocketRow {
   maxResidualMm: number
 }
 
-/** The slot-assignment half: every §4 slot the module's geometry draws is assigned. */
+/**
+ * The slot half of the M2 gate: every §4 slot the module's geometry draws is
+ * assigned in the theme AND resolves to a PBR set declared for it (M4-T1).
+ */
 export function moduleSlotProblems(
   module: AuthoredModule,
   theme: MaterialTheme,
@@ -68,6 +75,14 @@ export function moduleSlotProblems(
       problems.push(
         `${where}: slot '${slot}' is drawn by its geometry but unassigned in theme '${theme.id}' ` +
           `(unassigned slot = failed build)`,
+      )
+      continue
+    }
+    // Assigned: it must also RESOLVE, or the renderer has nothing to shade with.
+    const payload = (theme.slots as Record<string, unknown>)[slot]
+    for (const problem of slotSetProblems(payload, slot)) {
+      problems.push(
+        `${where}: drawn slot '${slot}' does not resolve in theme '${theme.id}' — ${problem}`,
       )
     }
   }

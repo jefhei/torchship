@@ -6,9 +6,11 @@ import {
   DEFAULT_THEME_ID,
   MATERIAL_THEMES,
   assertThemesComplete,
+  getPbrSet,
   getMaterialTheme,
   themeIdOf,
   themeProblems,
+  themeSetProblems,
   themesProblems,
 } from './index'
 
@@ -52,7 +54,7 @@ describe('material theme registry (M1-T4)', () => {
     expect(() => assertThemesComplete(MATERIAL_THEMES)).not.toThrow()
   })
 
-  it('the default theme fills all nine slots with distinct, non-blank PBR set ids', () => {
+  it('the default theme fills all nine slots with distinct, resolvable PBR set ids', () => {
     const slots = defaultTheme.slots as Record<string, MaterialSlotSpec>
     expect(Object.keys(slots).sort()).toEqual([...MATERIAL_SLOTS].sort())
     const setIds = MATERIAL_SLOTS.map((slot) => slots[slot].set)
@@ -61,6 +63,12 @@ describe('material theme registry (M1-T4)', () => {
       expect(id.trim()).not.toBe('')
     }
     expect(new Set(setIds).size).toBe(9)
+    // M4-T1: the ids are not just distinct, they RESOLVE — each one names the
+    // set the registry declares for that very slot.
+    for (const slot of MATERIAL_SLOTS) {
+      expect(getPbrSet(slots[slot].set).slot).toBe(slot)
+    }
+    expect(themeSetProblems(defaultTheme)).toEqual([])
   })
 
   it('omitting any single slot is caught, naming that slot', () => {

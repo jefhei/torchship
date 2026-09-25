@@ -23,14 +23,15 @@
 
 import { MATERIAL_SLOTS, assertMaterialSlotsComplete } from '../types/materials.ts'
 import type { MaterialSlot, MaterialSlots } from '../types/materials.ts'
+import { assignedSetId, themeSetProblems } from './pbr.ts'
 
 /**
- * Interim per-slot payload until M4-T1 lands the real PBR sets. A slot names
- * the PBR set it resolves to; M4-T1 authors those sets, M6 maps them to named
- * export materials. Kept deliberately minimal so M4 can widen it.
+ * A slot's payload: the id of the PBR set it resolves to. The sets themselves
+ * are authored at M4-T1 (`src/materials/pbr.ts`, `PBR_SETS`) and M6 maps them to
+ * named export materials. Kept deliberately minimal so a theme stays plain JSON.
  */
 export interface MaterialSlotSpec {
-  /** Id of the PBR set this slot resolves to (non-blank; authored at M4-T1). */
+  /** Id of the PBR set this slot resolves to (non-blank; authored in pbr.ts). */
   readonly set: string
 }
 
@@ -59,11 +60,14 @@ export function themeIdOf(theme: unknown): string | undefined {
   return typeof id === 'string' && id.trim() !== '' ? id : undefined
 }
 
-/** True when a slot payload is a real assignment (a non-blank `set` id). */
+/**
+ * True when a slot payload is a real assignment (a non-blank `set` id). The
+ * payload rule itself lives in pbr.ts (`assignedSetId`) so the theme gate, the
+ * kit harness and the resolution rule below can never disagree about what
+ * "assigned" means.
+ */
 function isFilledSlot(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null) return false
-  const set = (value as { set?: unknown }).set
-  return typeof set === 'string' && set.trim() !== ''
+  return assignedSetId(value) !== undefined
 }
 
 /**
@@ -106,6 +110,14 @@ export function themeProblems(theme: unknown): string[] {
     if (value !== undefined && !isFilledSlot(value)) {
       problems.push(`${where}: slot '${slot}' is assigned an empty payload`)
     }
+  }
+
+  // M4-T1: an assigned slot must RESOLVE — the set id it names must exist in the
+  // PBR registry and must be the set declared for that slot. An unresolvable id
+  // is a failed build exactly like an unassigned slot (the render bridge
+  // src/kit/render/slotSurfaces.ts would otherwise throw at the first draw).
+  for (const problem of themeSetProblems(candidate)) {
+    problems.push(`${where}: ${problem}`)
   }
 
   return problems
