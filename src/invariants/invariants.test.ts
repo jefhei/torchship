@@ -83,6 +83,7 @@ import {
 import { assemblyParts } from '../kit/modules/types'
 import { partsBounds } from '../kit/parts'
 import { assembleShip, collisionProblems } from '../assembler'
+import { lightRigProblems } from '../lighting/rig'
 import { navigationWorldOf } from '../player/nav'
 import { spawnPointOf, spawnProblems } from '../player/spawn'
 
@@ -681,7 +682,7 @@ describe('collision-match live check (PRD §8 bullet 4, live at M3-T3)', () => {
 
 /* ---------- room-lit (live at M2-T7) -------------------------------- */
 
-describe('room-lit live check (PRD §8 bullet 6, live at M2-T7)', () => {
+describe('room-lit live check (PRD §8 bullet 6, live at M2-T7, assembled half M4-T2)', () => {
   it('passes on all four fixtures: every module instance carries a fixture', () => {
     for (const fixture of SHIP_FIXTURES) {
       const result = checkRoomLit(fixture.spec)
@@ -689,6 +690,44 @@ describe('room-lit live check (PRD §8 bullet 6, live at M2-T7)', () => {
       expect(result.detail).toMatch(/no spec-dark rooms/)
       expect(result.detail).toContain('authored kit (M2-T7)')
     }
+  })
+
+  it('reports the ASSEMBLED rig after the spec half (M4-T2), on every fixture', () => {
+    for (const fixture of SHIP_FIXTURES) {
+      const result = checkRoomLit(fixture.spec)
+      expect(result.status).toBe('pass')
+      // The M4-T2 clause is APPENDED to the M2-T7 sentence, never instead of it.
+      expect(result.detail).toContain('no spec-dark rooms; the assembled ship mounts')
+      expect(result.detail).toMatch(/the assembled ship mounts \d+ practical fixtures/)
+      expect(result.detail).toMatch(/one per authored light socket/)
+      expect(result.detail).toMatch(/every module instance contributing at least one/)
+      expect(result.detail).toMatch(/\d+ at once on the worst deck \(budget 12\)/)
+      expect(result.detail).toMatch(/\d+ shadow-casting$/)
+    }
+  })
+
+  it("measures Patrol's rig: 43 fixtures, the drive glow among them", () => {
+    const detail = checkRoomLit(PATROL_SPEC).detail
+    expect(detail).toContain(
+      'the assembled ship mounts 43 practical fixtures ' +
+        '(28 panel + 6 task + 8 screen + 1 reactor)',
+    )
+    expect(detail).toContain('10 at once on the worst deck (budget 12)')
+    expect(detail).toContain('5 shadow-casting')
+    // The three real ships are inside the M4 frame budget; only the QA rig's
+    // doubled-up deck (rig-3) overflows it, which is the rig report's rule
+    // (lightRigProblems) rather than a §8 darkness verdict.
+    for (const id of ['patrol', 'long-haul', 'science'] as const) {
+      const ship = assembleShip(getShipFixture(id).spec)
+      expect(lightRigProblems(ship)).toEqual([])
+    }
+    expect(
+      lightRigProblems(
+        assembleShip(getShipFixture('stress').spec, {
+          requireValidSpec: false,
+        }),
+      ).join('; '),
+    ).toMatch(/frame budget: deck 3 \(rig-3\)/)
   })
 
   it('counts instances as spec refs plus the implicit per-deck shaft band', () => {
@@ -779,7 +818,11 @@ describe('invariant harness', () => {
       'fail', // spine-connectivity — live spec-level run continuity
       'pass', // collision-match — live at M3-T3: the rig moves kit and hull together
       'fail', // spawn-inside — no crew deck at index 1
-      'pass', // room-lit — live at M2-T7; the rig's defects are geometry, not lighting
+      'pass', // room-lit — live at M2-T7 (assembled half M4-T2); the rig's defects are
+      // geometry, not lighting: every socket still mounts a fixture and every
+      // instance is lit. Its rig-3 deck DOES overflow the M4 frame budget
+      // (two rooms on one deck, 15 fixtures > 12) but that budget is the rig
+      // report's rule (lightRigProblems), not a §8 darkness verdict.
     ])
   })
 

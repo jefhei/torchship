@@ -56,13 +56,17 @@
  *    the 10 cm cap per deck, both directions — with every pass-through the
  *    joins open left clear of hull boxes.
  *
- *  - checkRoomLit            (§8 bullet 6, 'room-lit', LIVE at M2-T7): every
- *    module INSTANCE in the spec carries ≥1 light fixture, read from the
- *    AUTHORED kit's light sockets (src/kit/modules/) — light sockets are M2
- *    data, so the fixture-time CONTRACT_KIT (which predates them, and whose
- *    lightSockets are deliberately empty) cannot answer this. Instances are
- *    the spec's module refs PLUS the implicit per-deck spine band the
- *    assembler synthesizes (M2-T6), so a dark shaft counts as a dark room.
+ *  - checkRoomLit            (§8 bullet 6, 'room-lit', LIVE at M2-T7; the
+ *    ASSEMBLED half LIVE at M4-T2): every module INSTANCE in the spec carries
+ *    ≥1 light fixture, read from the AUTHORED kit's light sockets
+ *    (src/kit/modules/) — light sockets are M2 data, so the fixture-time
+ *    CONTRACT_KIT (which predates them, and whose lightSockets are deliberately
+ *    empty) cannot answer this. Instances are the spec's module refs PLUS the
+ *    implicit per-deck spine band the assembler synthesizes (M2-T6), so a dark
+ *    shaft counts as a dark room. M4-T2 added the assembled half: the ship's
+ *    PRACTICAL RIG (src/lighting/rig.ts) mounts one fixture per authored
+ *    socket, every instance lit, ids unique, no deck over the frame budget —
+ *    the fixtures `ShipLighting` mounts are exactly what this check reads.
  *
  * All six are wired into the harness via LIVE_CHECKS; a stub invariant has no
  * entry here, which is what makes the harness report it `deferred`. No stub
@@ -96,6 +100,15 @@ import type { ShipAssembly } from '../assembler'
 // (and a second copy of three) into the invariant harness.
 import { navigationProblems, navigationWorldOf } from '../player/nav'
 import { chooseSpawn, spawnLabel } from '../player/spawn'
+// Same rule for the M4-T2 practical lighting: the pure rig module, never the
+// `../lighting` barrel (which carries the R3F `ShipLighting` component).
+import { LIGHT_KINDS, LIGHTS_ACTIVE_MAX } from '../lighting/archetypes'
+import {
+  lightRigCoverageProblems,
+  lightRigOf,
+  lightRigTally,
+  withShadowCasters,
+} from '../lighting/rig'
 
 /**
  * §8 bullet 3 live check. Fails when the spine run is broken at any deck
@@ -482,9 +495,25 @@ export function roomLightTally(
 }
 
 /**
- * §8 bullet 6 live check (LIVE at M2-T7). "Every module instance has ≥ 1 light
- * fixture (no legally-dark room in the spec)" — measured over the AUTHORED kit,
- * which is the first kit that carries light sockets at all.
+ * §8 bullet 6 live check (LIVE at M2-T7; the assembled half went live at
+ * M4-T2). "Every module instance has ≥ 1 light fixture (no legally-dark room in
+ * the spec)" — measured over the AUTHORED kit, which is the first kit that
+ * carries light sockets at all — AND, since M4-T2, on the ship the rig actually
+ * lights: `lightRigOf` (src/lighting/rig.ts) derives one practical fixture per
+ * authored light socket, in world space, from the same anchors the modules'
+ * emissive geometry was built on, and this check reads its verdict — every
+ * socket lights exactly one fixture, every module instance (rooms AND the
+ * per-deck shaft bands) contributes at least one, fixture ids are unique, and no
+ * deck carries more fixtures than the M4 frame budget mounts at once. The rig
+ * this check proves is the rig the app mounts (`ShipLighting` shows exactly what
+ * `activeLightsFor` selects), so the invariant cannot drift from the walkthrough.
+ * The §8 rule is darkness, so it runs the COVERAGE rules (one fixture per
+ * authored socket, unique ids, no dark instance); the M4 frame budget is a
+ * product gate on the same rig (`lightRigProblems`), not a §8 bullet.
+ *
+ * Like the seams, collision and spine checks it assembles the spec itself with
+ * the validator gate off, so a REJECTED rig still gets a lighting verdict rather
+ * than an exception.
  */
 export const checkRoomLit: InvariantCheck = (spec: ShipSpec) => {
   const problems = roomLitProblems(spec)
@@ -492,14 +521,38 @@ export const checkRoomLit: InvariantCheck = (spec: ShipSpec) => {
     return { status: 'fail', detail: problems.join('; ') }
   }
   const tally = roomLightTally(spec)
-  return {
-    status: 'pass',
-    detail:
-      `every module instance carries ≥ 1 light fixture: ${tally.roomInstances} room instance` +
-      `${tally.roomInstances === 1 ? '' : 's'} + ${tally.bands} shaft band` +
-      `${tally.bands === 1 ? '' : 's'} resolve to ${tally.fixtures} practical light sockets ` +
-      `in the authored kit (M2-T7) — no spec-dark rooms`,
+  const specDetail =
+    `every module instance carries ≥ 1 light fixture: ${tally.roomInstances} room instance` +
+    `${tally.roomInstances === 1 ? '' : 's'} + ${tally.bands} shaft band` +
+    `${tally.bands === 1 ? '' : 's'} resolve to ${tally.fixtures} practical light sockets ` +
+    `in the authored kit (M2-T7) — no spec-dark rooms`
+
+  let mounted: string
+  try {
+    const ship = assembleShip(spec, { requireValidSpec: false })
+    const coverage = lightRigCoverageProblems(ship)
+    if (coverage.length > 0) {
+      return { status: 'fail', detail: coverage.join('; ') }
+    }
+    const rigTally = lightRigTally(withShadowCasters(lightRigOf(ship)))
+    const kinds = LIGHT_KINDS.filter((kind) => rigTally.byKind[kind] > 0)
+      .map((kind) => `${rigTally.byKind[kind]} ${kind}`)
+      .join(' + ')
+    mounted =
+      `; the assembled ship mounts ${rigTally.lights} practical fixture` +
+      `${rigTally.lights === 1 ? '' : 's'} (${kinds}) — one per authored light socket, ` +
+      `every module instance contributing at least one, ${rigTally.maxPerDeck} at once on the ` +
+      `worst deck (budget ${LIGHTS_ACTIVE_MAX}), ${rigTally.shadowCasters} shadow-casting`
+  } catch (error) {
+    return {
+      status: 'fail',
+      detail:
+        `the ship cannot be assembled, so its practical fixtures cannot be mounted: ` +
+        `${error instanceof Error ? error.message : String(error)}`,
+    }
   }
+
+  return { status: 'pass', detail: specDetail + mounted }
 }
 
 /**

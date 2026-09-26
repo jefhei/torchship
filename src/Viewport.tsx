@@ -30,9 +30,11 @@ import {
  *
  * The preset is hard-wired to Patrol here; the picker (PRD §6.1) and the share
  * URL / seed (M6-T3) come later and will hand this component a different spec.
- * The interim ambient light keeps the interior legible until M4-T2's
- * practical-only rig lands — PRD §4 allows no sun and no sky, so nothing
- * directional is added here, and the ambient is the one line M4 replaces.
+ * Lighting is M4-T2's practical-only rig: `WalkthroughScene` derives it from the
+ * assembly's own light sockets and mounts the deck the walker is on, which is
+ * why this component hands it `walk.deckIndex` — the walk report is already the
+ * app's one source for "which deck am I on". The interim M1-T1 ambient light is
+ * gone (PRD §4 allows no sun and no sky; the rig carries its own warm fill).
  *
  * `ready` still flips once the renderer exists (Canvas onCreated), letting the
  * shell — and tests — tell "booted and rendering" apart from a blank canvas.
@@ -54,9 +56,11 @@ export default function Viewport() {
         onCreated={() => setReady(true)}
       >
         <color attach="background" args={['#05070a']} />
-        {/* Interim key light — replaced by the M4-T2 practical rig. */}
-        <ambientLight intensity={0.35} />
-        <WalkthroughScene assembly={assembly} onStep={setWalk} />
+        <WalkthroughScene
+          assembly={assembly}
+          deckIndex={walk?.deckIndex ?? null}
+          onStep={setWalk}
+        />
       </Canvas>
       {ready && (
         <span className="viewport-ready" data-testid="viewport-ready">

@@ -82,6 +82,24 @@ bridge (theme-driven, no colour left in the kit) and `materialSetReport(ship)` r
 parts + draw calls for an assembled ship. Measured: all four canonical ships draw **9/9 slots**
 (Patrol 736 parts / 179 calls shaded from theme `firebrand`).
 
+## Practical lighting (M4-T2)
+
+PRD §4 allows **no sun and no sky**: every lumen comes from a panel, a task strip, a screen or the
+reactor. `src/lighting/archetypes.ts` authors exactly those four `LightKind` recipes — and they are
+physical, not taste. Each names the §4 lens slot the fixture is *drawn* with, so a light's colour
+IS that lens's emissive tint (resolved through the M4-T1 bridge: re-skin the panel lens and the
+ship re-lights; an inert lens is refused); a designed throw, a target illuminance, and an intensity
+**derived as `target × throw²`** in candela (three.js is physically correct, decay 2); a reach
+bounded below by the throw and above by `MAX_LIGHT_RANGE_M`; and a shadow request only on task
+lights (PRD §11 "small shadow maps only for task lights that matter"). `src/lighting/rig.ts` then
+mounts **one fixture per authored light socket** of an assembled ship, in world space through the
+same transform the geometry went through — nothing is hand-placed. The frame budget is a forward
+renderer's: the rig is **deck-scoped** (`LIGHTS_ACTIVE_MAX` = 12 mounted at once, an over-budget
+deck keeping landmarks and work lights before ceiling fill), and `lightRigReport(ship).activeMax`
+is the number the M4 gate reads. Measured: Patrol **43 fixtures** (28 panel + 6 task + 8 screen +
+1 reactor) over 5 decks, 10 mounted at once, 5 shadow-casting; Vagabond 51, Surveyor 44. The one
+fill is warm and dim (`#4a443c` @ 0.28) and capped, so it can never flatten the interior.
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every

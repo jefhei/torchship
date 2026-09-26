@@ -24,12 +24,21 @@
  * M3-T5 ladder runs and the modules' own hatch leaves, never re-derived). The
  * spawn's yaw comes with it, so the player starts looking where the selection
  * says they should (into the crew room, or at the ladder).
+ *
+ * **M4-T2 adds the practical lighting.** `lightRigOf(assembly)` derives every
+ * fixture of the ship from the modules' own light sockets (nothing hand-placed,
+ * no second opinion about where a lens is), and `<ShipLighting>` mounts the
+ * deck the WALKER is on — `deckIndex` comes in from the walk report (the app's
+ * one source for "which deck am I on") and falls back to the spawn deck before
+ * the first step. The interim M1-T1 ambient light is gone: PRD §4 allows no sun
+ * and no sky, so the only fill is the rig's own warm, dim, gated ambient term.
  */
 
 import { useEffect, useMemo } from 'react'
 import type { ShipAssembly } from '../assembler'
 import type { DeckAssembly } from '../assembler'
 import { InstancedParts, MergedParts } from '../kit/render'
+import { ShipLighting, lightRigOf } from '../lighting'
 import { WalkRig, type WalkReport } from './WalkRig'
 import { deckDrawPlan, disposeDrawPlan } from './deckGeometry'
 import { navigationWorldOf } from './nav'
@@ -84,19 +93,28 @@ export function ShipInterior({ assembly }: { assembly: ShipAssembly }) {
 export function WalkthroughScene({
   assembly,
   enabled = true,
+  deckIndex = null,
   onStep,
 }: {
   assembly: ShipAssembly
   /** When false the rig ignores the keys (gravity keeps running). */
   enabled?: boolean
+  /**
+   * The deck whose practical lighting is lit. `null` = before the first walk
+   * report: the spawn deck's lights are mounted instead, so the app never shows
+   * a dark first frame.
+   */
+  deckIndex?: number | null
   onStep?: (report: WalkReport) => void
 }) {
   const world = useMemo(() => navigationWorldOf(assembly), [assembly])
   const spawn = useMemo(() => spawnPointOf(assembly, world), [assembly, world])
+  const rig = useMemo(() => lightRigOf(assembly), [assembly])
 
   return (
     <>
       <ShipInterior assembly={assembly} />
+      <ShipLighting rig={rig} deckIndex={deckIndex ?? spawn?.deckIndex ?? 0} />
       {spawn !== null && (
         <WalkRig
           world={world}
