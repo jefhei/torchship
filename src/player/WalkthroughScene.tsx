@@ -32,6 +32,13 @@
  * one source for "which deck am I on") and falls back to the spawn deck before
  * the first step. The interim M1-T1 ambient light is gone: PRD §4 allows no sun
  * and no sky, so the only fill is the rig's own warm, dim, gated ambient term.
+ *
+ * **M4-T3 adds the post chain.** `postPlanOf(assembly)` (src/post/) decides the
+ * whole pass: a bloom threshold calibrated into the gap between the brightest
+ * lit surface and the dimmest emitting lens, and whether the ambient-occlusion
+ * pass is affordable at all — read off M3-T7's draw calls and M4-T2's
+ * deck-scoped light ceiling. `<ShipPost>` mounts exactly that plan, so the
+ * passes in the frame are the passes the report counted.
  */
 
 import { useEffect, useMemo } from 'react'
@@ -39,6 +46,7 @@ import type { ShipAssembly } from '../assembler'
 import type { DeckAssembly } from '../assembler'
 import { InstancedParts, MergedParts } from '../kit/render'
 import { ShipLighting, lightRigOf } from '../lighting'
+import { ShipPost, postPlanOf } from '../post'
 import { WalkRig, type WalkReport } from './WalkRig'
 import { deckDrawPlan, disposeDrawPlan } from './deckGeometry'
 import { navigationWorldOf } from './nav'
@@ -110,11 +118,13 @@ export function WalkthroughScene({
   const world = useMemo(() => navigationWorldOf(assembly), [assembly])
   const spawn = useMemo(() => spawnPointOf(assembly, world), [assembly, world])
   const rig = useMemo(() => lightRigOf(assembly), [assembly])
+  const post = useMemo(() => postPlanOf(assembly), [assembly])
 
   return (
     <>
       <ShipInterior assembly={assembly} />
       <ShipLighting rig={rig} deckIndex={deckIndex ?? spawn?.deckIndex ?? 0} />
+      <ShipPost plan={post} />
       {spawn !== null && (
         <WalkRig
           world={world}
