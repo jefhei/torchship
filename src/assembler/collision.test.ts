@@ -59,6 +59,7 @@ import {
   passageIntrusions,
   passagesOf,
   seamSolidParts,
+  wearSolidParts,
 } from './index'
 
 /* ---------- helpers ------------------------------------------------ */
@@ -149,15 +150,16 @@ function box(
 /* ---------- composition -------------------------------------------- */
 
 describe('the deck hull (M3-T3)', () => {
-  it('is the modules\u2019 own hints placed, then the generated plugs', () => {
+  it('is the modules\u2019 own hints placed, then the generated plugs and worn detail', () => {
     for (const fixture of SHIP_FIXTURES) {
       const ship = assembleShip(fixture.spec, {
         requireValidSpec: fixture.expectValid,
       })
       for (const deck of ship.decks) {
-        const hull = deckHull(deck.modules, deck.seams)
+        const hull = deckHull(deck.modules, deck.seams, deck.wear)
         const moduleEntries = hull.filter((entry) => entry.origin === 'module')
         const seamEntries = hull.filter((entry) => entry.origin === 'seam')
+        const wearEntries = hull.filter((entry) => entry.origin === 'wear')
 
         // The module half is every placed hint, in module order (rooms then band).
         expect(moduleEntries.map((entry) => entry.box)).toEqual(
@@ -166,15 +168,17 @@ describe('the deck hull (M3-T3)', () => {
         expect(moduleEntries.map((entry) => entry.source.moduleId)).toEqual(
           deck.modules.flatMap((owner) => owner.boxes.map(() => owner.source.moduleId)),
         )
-        // The generated half is exactly the solid seam parts (M3-T2's predicate).
+        // The generated halves are exactly the solid seam parts (M3-T2) and the
+        // solid worn detail (M4-T4) — one predicate each, read by both sides.
         expect(seamEntries.map((entry) => entry.part)).toEqual(seamSolidParts(deck))
+        expect(wearEntries.map((entry) => entry.part)).toEqual(wearSolidParts(deck))
         expect(
           seamEntries.every((entry) =>
             entry.planId?.startsWith(`deck-${deck.deckIndex}-seam-`),
           ),
         ).toBe(true)
         // The node carries that hull, box for box, in that order.
-        expect(deckHullBoxes(deck.modules, deck.seams)).toEqual(
+        expect(deckHullBoxes(deck.modules, deck.seams, deck.wear)).toEqual(
           deck.node.collision.boxes,
         )
         expect(hull.map((entry) => entry.box)).toEqual(deck.node.collision.boxes)
@@ -238,18 +242,29 @@ describe('the deck hull (M3-T3)', () => {
     }
   })
 
-  it('counts one box per solid part + plug, deck by deck (Patrol measured)', () => {
-    const tally = collisionTally(assembleShip(PATROL_SPEC))
+  it('counts one box per solid part + plug + wear detail, deck by deck (Patrol measured)', () => {
+    const ship = assembleShip(PATROL_SPEC)
+    const tally = collisionTally(ship)
     expect(tally.decks.map((deck) => deck.moduleBoxes)).toEqual([65, 82, 67, 79, 130])
     expect(tally.decks.map((deck) => deck.seamBoxes)).toEqual([3, 3, 3, 3, 3])
-    expect(tally.decks.map((deck) => deck.boxes)).toEqual([68, 85, 70, 82, 133])
-    expect(tally.boxes).toBe(438)
+    // The worn-detail boxes the pass adds (M4-T4) — derived from the deck's own
+    // plans, so the tally and the assembly can never disagree.
+    expect(tally.decks.map((deck) => deck.wearBoxes)).toEqual(
+      ship.decks.map((deck) => wearSolidParts(deck).length),
+    )
+    expect(tally.decks.map((deck) => deck.boxes)).toEqual([73, 92, 78, 90, 141])
+    expect(tally.boxes).toBe(474)
     expect(tally.moduleBoxes).toBe(423)
     expect(tally.seamBoxes).toBe(15)
+    expect(tally.wearBoxes).toBe(36)
     expect(tally.joins).toBe(5)
     // The other two real ships, for scale.
-    expect(collisionTally(assembleShip(LONG_HAUL_SPEC)).boxes).toBe(571)
-    expect(collisionTally(assembleShip(SCIENCE_SPEC)).boxes).toBe(375)
+    expect(collisionTally(assembleShip(LONG_HAUL_SPEC)).boxes).toBe(617)
+    expect(collisionTally(assembleShip(SCIENCE_SPEC)).boxes).toBe(412)
+    // With the pass off, the hull is exactly the pre-M4-T4 one.
+    const bare = collisionTally(assembleShip(PATROL_SPEC, { wearDensity: 'off' }))
+    expect(bare.boxes).toBe(438)
+    expect(bare.wearBoxes).toBe(0)
   })
 })
 

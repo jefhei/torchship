@@ -25,24 +25,27 @@
  * canonical ship, so a future renderer change that adds or drops a call fails
  * the suite rather than silently blowing the frame budget.
  *
- * Measured (2026-09-24, default options — the numbers pinned in
- * drawCalls.test.ts):
+ * Measured (2026-09-29, default options — the numbers pinned in
+ * drawCalls.test.ts). The placed-part counts include the M3-T2 seam geometry
+ * and the M4-T4 worn detail; `wearDensity: 'off'` reproduces the pre-M4-T4
+ * table (Patrol 736 parts / 179 calls), which is also the baseline the wear
+ * pass's own cost is measured against (src/wear/report.ts).
  *
  * | ship | decks | placed parts | merged / instanced parts | groups | batches | calls |
  * |------|-------|--------------|--------------------------|--------|---------|-------|
- * | Firebrand (patrol) | 5 | 736 | 107 / 629 | 29 | 150 | **179** |
- * | Vagabond (long-haul) | 6 | 932 | 121 / 811 | 34 | 179 | **213** |
- * | Surveyor (science) | 5 | 676 | 119 / 557 | 30 | 151 | **181** |
- * | Offspec (QA rig) | 5 | 749 | 123 / 626 | 29 | 165 | **194** |
+ * | Firebrand (patrol) | 5 | 772 | 137 / 635 | 33 | 153 | **186** |
+ * | Vagabond (long-haul) | 6 | 978 | 165 / 813 | 41 | 180 | **221** |
+ * | Surveyor (science) | 5 | 713 | 152 / 561 | 32 | 153 | **185** |
+ * | Offspec (QA rig) | 5 | 787 | 147 / 640 | 32 | 172 | **204** |
  *
- * All four fixtures are under the 250-call ceiling; Patrol carries 71 calls of
- * headroom for M4's clutter pass, the deepest deck (aft, 196 parts) costs 34
- * and the most expensive deck on any ship is the crew deck's 38. The
+ * All four fixtures are under the 250-call ceiling; Patrol carries 64 calls of
+ * headroom for M4's passes, the deepest deck (aft, 204 parts) costs 36 and the
+ * most expensive deck on any ship is the crew deck's 39. The
  * `minInstances` threshold is the only knob that trades calls for instancing
- * (measured on Patrol: 1 → 257 calls, 2 → 179, 3 → 109, 4 → 95, 6 → 70,
- * 8 → 56, 12 → 40, 20 → 37): raising it merges more shapes into the slot
+ * (measured on Patrol: 1 → 290 calls, 2 → 186, 3 → 112, 4 → 98, 6 → 73,
+ * 8 → 58, 12 → 42, 20 → 38): raising it merges more shapes into the slot
  * groups (fewer calls, more merged vertices), lowering it to 1 gives every
- * distinct mould its own batch (no merging at all — 257 calls, over the
+ * distinct mould its own batch (no merging at all — 290 calls, over the
  * ceiling, which is why the default stays 2: the vertex-memory win exactly
  * where a mould repeats).
  */

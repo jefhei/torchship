@@ -377,8 +377,9 @@ describe('merged geometry + instanced batches', () => {
     for (const fixture of SHIP_FIXTURES) {
       const ship = assembleShip(fixture.spec, { requireValidSpec: fixture.expectValid })
       for (const deck of ship.decks) {
-        // Module geometry (the kit's own parts) plus the seam pass's generated
-        // parts: every one of them joins the partition exactly once.
+        // Module geometry (the kit's own parts) plus the seam pass's and the
+        // worn-detail pass's generated parts: every one of them joins the
+        // partition exactly once.
         const modulePartsCount = deck.modules.reduce(
           (sum, owner) => sum + owner.parts.length,
           0,
@@ -386,11 +387,11 @@ describe('merged geometry + instanced batches', () => {
         expect(modulePartsCount).toBe(
           expectedDeckParts(fixture.spec.decks[deck.deckIndex]),
         )
+        const generated =
+          deck.seams.reduce((sum, plan) => sum + plan.parts.length, 0) +
+          deck.wear.reduce((sum, plan) => sum + plan.parts.length, 0)
         const placed = placedPartsOf(deck)
-        expect(placed.length).toBe(
-          modulePartsCount +
-            deck.seams.reduce((sum, plan) => sum + plan.parts.length, 0),
-        )
+        expect(placed.length).toBe(modulePartsCount + generated)
         const grouped = deck.groups.flatMap((plan) => plan.parts)
         const batched = deck.batches.flatMap((plan) => plan.parts)
         expect(grouped.length + batched.length).toBe(placed.length)
@@ -536,8 +537,9 @@ describe('merged geometry + instanced batches', () => {
         first.decks[index].batches.map((plan) => plan.batch.id),
       )
     })
-    // …and a single deck assembled alone matches the ship's copy of it.
-    const alone = assembleDeck(PATROL_SPEC.decks[1], 1)
+    // …and a single deck assembled alone matches the ship's copy of it (the
+    // ship's own seed included: the worn detail is seeded per spec, M4-T4).
+    const alone = assembleDeck(PATROL_SPEC.decks[1], 1, {}, PATROL_SPEC.seed)
     expect(alone.node).toEqual(first.decks[1].node)
   })
 
@@ -689,20 +691,36 @@ describe('per-deck collision hull', () => {
         const plugs = deck.seams
           .filter((plan) => plan.solid)
           .flatMap((plan) => plan.parts)
+        const wear = deck.wear
+          .filter((plan) => plan.solid)
+          .flatMap((plan) => plan.parts)
         expect(deck.node.collision.boxes).toHaveLength(
-          expectedDeckBoxes(fixture.spec.decks[deck.deckIndex]) + plugs.length,
+          expectedDeckBoxes(fixture.spec.decks[deck.deckIndex]) +
+            plugs.length +
+            wear.length,
         )
-        // The modules' own hints, placed, then the generated plugs (M3-T3).
+        // The modules' own hints, placed, then the generated plugs (M3-T3),
+        // then the generated worn detail (M4-T4).
         expect(deck.node.collision.boxes).toEqual([
           ...deck.modules.flatMap((owner) => owner.boxes),
           ...plugs.map((part) => partBounds(part.part)),
+          ...wear.map((part) => partBounds(part.part)),
         ])
       }
     }
     const patrol = assembleShip(PATROL_SPEC)
-    // head 37 solid parts + the band's 28 + the 3 blanked band faces M3-T2 plugs.
-    expect(patrol.decks[0].node.collision.boxes).toHaveLength(37 + 28 + 3)
-    expect(patrol.decks[4].node.collision.boxes).toHaveLength(102 + 28 + 3)
+    // head 37 solid parts + the band's 28 + the 3 blanked band faces M3-T2 plugs
+    // + the deck's solid worn detail (M4-T4).
+    const headWear = patrol.decks[0].wear.reduce(
+      (sum, plan) => sum + plan.parts.length,
+      0,
+    )
+    const aftWear = patrol.decks[4].wear.reduce(
+      (sum, plan) => sum + plan.parts.length,
+      0,
+    )
+    expect(patrol.decks[0].node.collision.boxes).toHaveLength(37 + 28 + 3 + headWear)
+    expect(patrol.decks[4].node.collision.boxes).toHaveLength(102 + 28 + 3 + aftWear)
   })
 
   it('places the hull in world space: the band hull spans the shaft column', () => {
@@ -744,10 +762,14 @@ describe('the seam pass rides the assembly (M3-T2)', () => {
           expect(plan.problems).toEqual([])
           expect(plan.sealedBy).not.toBe('none')
         }
-        // The generated parts join the deck's geometry partition.
+        // The generated parts (seams + worn detail) join the deck's geometry
+        // partition.
         const seamParts = deck.seams.reduce((sum, plan) => sum + plan.parts.length, 0)
+        const wearParts = deck.wear.reduce((sum, plan) => sum + plan.parts.length, 0)
         expect(placedPartsOf(deck).length).toBe(
-          deck.modules.reduce((sum, owner) => sum + owner.parts.length, 0) + seamParts,
+          deck.modules.reduce((sum, owner) => sum + owner.parts.length, 0) +
+            seamParts +
+            wearParts,
         )
       }
       expect(assemblyProblems(ship)).toEqual([])

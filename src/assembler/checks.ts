@@ -52,13 +52,14 @@ import { moduleBounds, moduleCollisionBoxes } from '../kit/modules/types'
 import { placePart } from '../kit/modules/placement'
 import { SEAM_TOLERANCES } from '../spikes/seams/tolerances'
 import { DEFAULT_MIN_INSTANCES, mouldOf, placementFor } from './batches'
-import { collisionProblems, deckHull, hullLabel } from './collision'
+import { collisionProblems, deckHull, hullLabel, wearSolidParts } from './collision'
 import { drawCallProblems } from './drawCalls'
 import { joinLabel, spineJoinOf } from './joins'
 import { boxContains, isWellFormedBox, transformAabb, worldOriginOf } from './place'
 import { placedPartsOf } from './assemble'
 import { seamSolidParts } from './seams'
 import { spineRunProblems } from './spineRun'
+import { wearProblems } from '../wear/checks'
 import type { DeckAssembly, PlacedModule, SeamPlan, ShipAssembly } from './types'
 
 /** Deconstructed allowance constants — the M2 gate's two structural exemptions. */
@@ -383,22 +384,25 @@ export function assemblyProblems(
     }
 
     // 7. The collision hull is the modules' own hints placed, plus the
-    // generated seam geometry that must block a walker (M3-T3: a blanked
-    // socket nothing else seals is plugged, so its plug is solid). The
+    // generated geometry that must block a walker (M3-T3: a blanked socket
+    // nothing else seals is plugged, so its plug is solid; M4-T4: the worn
+    // detail stands in the room, so every wear part is solid too). The
     // bullet-4 measurement itself (match against the visible geometry +
     // pass-through clearance) is rule 11.
     const expectedBoxes =
       assembly.modules.reduce(
         (sum, owner) => sum + moduleCollisionBoxes(owner.module).length,
         0,
-      ) + seamSolidParts(assembly).length
+      ) +
+      seamSolidParts(assembly).length +
+      wearSolidParts(assembly).length
     if (node.collision.boxes.length !== expectedBoxes) {
       problems.push(
         `${where}: collision hull has ${node.collision.boxes.length} box(es) for ${expectedBoxes} ` +
-          `solid part(s) across its modules' hints and its generated plugs`,
+          `solid part(s) across its modules' hints, its generated plugs and its worn detail`,
       )
     }
-    const hull = deckHull(assembly.modules, assembly.seams)
+    const hull = deckHull(assembly.modules, assembly.seams, assembly.wear)
     hull.forEach((entry, index) => {
       const box = node.collision.boxes[index]
       if (
@@ -541,6 +545,13 @@ export function assemblyProblems(
   // instanced batch, under the §10 ceiling (drawCalls.ts measures the
   // partition the renderer draws — see src/player/deckGeometry.ts).
   problems.push(...drawCallProblems(ship))
+
+  // 13. The worn-detail pass (M4-T4): the generated clutter / paint patches /
+  // cable routes are mounted on the module surfaces they decorate, inside
+  // their module, clear of every doorway and of geometry they are not mounted
+  // on, walk-over (a floor prop is under the M3-T4 step height), solid (the
+  // hull carries them) and inside the pass's own per-deck draw-call budget.
+  problems.push(...wearProblems(ship))
 
   return problems
 }

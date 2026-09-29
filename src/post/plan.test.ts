@@ -5,9 +5,9 @@
  * machine gate "frame budget met on Patrol"):
  *
  *  - the two budgets the pass competes for, measured on all four fixtures: §10
- *    draw calls (M3-T7's tally) and the deck-scoped light ceiling (M4-T2's
- *    `activeLightsFor`) — Patrol 179 calls / 12-margin-is-71 / 10 of 12
- *    fixtures;
+ *    draw calls (M3-T7's tally, worn detail included since M4-T4) and the
+ *    deck-scoped light ceiling (M4-T2's `activeLightsFor`) — Patrol 186 calls /
+ *    margin 64 / 10 of 12 fixtures;
  *  - the affordability rule itself, on both edges (24 calls of margin, 1 fixture
  *    of headroom) and a doctored budget either side of each;
  *  - the measured outcome of "SSAO only if budget allows": the three real ships
@@ -47,32 +47,32 @@ const LONG_HAUL = shipOf('long-haul')
 const SCIENCE = shipOf('science')
 const STRESS = shipOf('stress')
 
-/** The measured shape of the four canonical fixtures (M3-T7 + M4-T2 numbers). */
+/** The measured shape of the four canonical fixtures (M3-T7 + M4-T4 + M4-T2). */
 const MEASURED = {
   patrol: {
-    calls: 179,
-    callsHeadroom: 71,
+    calls: 186,
+    callsHeadroom: 64,
     activeLights: 10,
     lightHeadroom: 2,
     ssao: true,
   },
   'long-haul': {
-    calls: 213,
-    callsHeadroom: 37,
+    calls: 221,
+    callsHeadroom: 29,
     activeLights: 10,
     lightHeadroom: 2,
     ssao: true,
   },
   science: {
-    calls: 181,
-    callsHeadroom: 69,
+    calls: 185,
+    callsHeadroom: 65,
     activeLights: 10,
     lightHeadroom: 2,
     ssao: true,
   },
   stress: {
-    calls: 194,
-    callsHeadroom: 56,
+    calls: 204,
+    callsHeadroom: 46,
     activeLights: 12,
     lightHeadroom: 0,
     ssao: false,
@@ -83,9 +83,9 @@ const MEASURED = {
 function budgetWith(overrides: Partial<PostBudget>): PostBudget {
   return {
     ship: 'test',
-    calls: 179,
+    calls: 186,
     ceiling: DRAW_CALL_CEILING,
-    callsHeadroom: 71,
+    callsHeadroom: 64,
     activeLights: 10,
     lightBudget: LIGHTS_ACTIVE_MAX,
     lightHeadroom: 2,
@@ -126,7 +126,7 @@ describe('the frame budget the post pass competes for (M4-T3)', () => {
     )
     const patrol = ssaoAffordableIn(postBudgetOf(PATROL))
     expect(patrol.reason).toMatch(
-      /71 draw calls of margin \(§10\) and 2 fixtures of light headroom/,
+      /64 draw calls of margin \(§10\) and 2 fixtures of light headroom/,
     )
   })
 
@@ -192,9 +192,9 @@ describe('the post plan (M4-T3)', () => {
 
   it('says why AO was dropped, in the numbers that decided it', () => {
     expect(postPlanOf(STRESS).ssaoReason).toMatch(/12 of 12 fixtures/)
-    expect(postPlanOf(PATROL).ssaoReason).toMatch(/71 draw calls of margin/)
+    expect(postPlanOf(PATROL).ssaoReason).toMatch(/64 draw calls of margin/)
     expect(postPlanOf(SCIENCE).detail).toMatch(
-      /181 of 250 draw calls and 10 of 12 fixtures/,
+      /185 of 250 draw calls and 10 of 12 fixtures/,
     )
     expect(postPlanOf(LONG_HAUL).detail).toMatch(/ambient occlusion on/)
   })

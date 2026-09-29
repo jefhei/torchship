@@ -608,10 +608,12 @@ describe('collision-match live check (PRD §8 bullet 4, live at M3-T3)', () => {
         /door-socket pass-throughs left clear of hull boxes/,
       )
     }
-    // Patrol: 423 placed module hints + 15 generated plugs over 5 decks, 5 joins.
+    // Patrol: 423 placed module hints + 15 generated plugs + 36 wear boxes over
+    // 5 decks, 5 joins.
     const patrol = checkCollisionMatch(PATROL_SPEC)
-    expect(patrol.detail).toContain('438 box(es)')
+    expect(patrol.detail).toContain('474 box(es)')
     expect(patrol.detail).toContain('423 placed module hints + 15 generated plugs')
+    expect(patrol.detail).toContain('36 wear boxes')
     expect(patrol.detail).toContain('over 5 decks')
     expect(patrol.detail).toContain('5 door-socket pass-throughs left clear')
   })

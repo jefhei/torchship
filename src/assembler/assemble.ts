@@ -63,6 +63,8 @@ import type {
   ShipSpec,
 } from '../types'
 import { assertValidShipSpec, moduleDoors } from '../validation'
+import { DEFAULT_WEAR_DENSITY } from '../wear/recipes'
+import { wearPartsOf, wearPlansForDeck } from '../wear/detail'
 import { DEFAULT_MIN_INSTANCES, partitionParts } from './batches'
 import { deckHullBoxes } from './collision'
 import { scanDeckSockets } from './joins'
@@ -75,6 +77,7 @@ import type {
   PlacedModule,
   PlacedPart,
   ShipAssembly,
+  WearDensity,
 } from './types'
 
 /** The spec's module refs must resolve: throw naming the deck and the ref. */
@@ -101,6 +104,7 @@ function resolveOptions(options: AssembleOptions): {
   modules: readonly AuthoredModule[]
   minInstances: number
   requireValidSpec: boolean
+  wearDensity: WearDensity
 } {
   const modules = options.modules ?? AUTHORED_MODULES
   return {
@@ -109,6 +113,7 @@ function resolveOptions(options: AssembleOptions): {
     modules,
     minInstances: options.minInstances ?? DEFAULT_MIN_INSTANCES,
     requireValidSpec: options.requireValidSpec ?? true,
+    wearDensity: options.wearDensity ?? DEFAULT_WEAR_DENSITY,
   }
 }
 
@@ -180,31 +185,36 @@ export function interactivesOf(
 
 /**
  * Every placed part of a deck's geometry: the module instances' kit parts in
- * build order, then the seam pass's generated parts (M3-T2). This is the
- * exact list `partitionParts` splits into merged groups and instanced batches,
- * and the list the assembler gate counts — one source of truth, so a part can
- * never be added to the deck without joining the partition.
+ * build order, then the seam pass's generated parts (M3-T2), then the
+ * worn-detail pass's generated parts (M4-T4). This is the exact list
+ * `partitionParts` splits into merged groups and instanced batches, and the
+ * list the assembler gate counts — one source of truth, so a part can never be
+ * added to the deck without joining the partition (and therefore the draw-call
+ * budget).
  */
 export function placedPartsOf(
-  assembly: Pick<DeckAssembly, 'modules' | 'seams'>,
+  assembly: Pick<DeckAssembly, 'modules' | 'seams' | 'wear'>,
 ): PlacedPart[] {
   return [
     ...assembly.modules.flatMap((owner) => owner.parts),
     ...assembly.seams.flatMap((plan) => plan.parts),
+    ...wearPartsOf(assembly),
   ]
 }
 
 /**
  * Assemble one deck: instantiate its rooms and its synthesized shaft band,
- * scan the joins, place the parts, partition them into merged groups and
- * instanced batches, and emit the M1-T2 deck node.
+ * scan the joins, place the parts, generate the worn detail, partition the
+ * whole list into merged groups and instanced batches, and emit the M1-T2 deck
+ * node.
  */
 export function assembleDeck(
   deck: DeckSpec,
   deckIndex: number,
   options: AssembleOptions = {},
+  seed = 0,
 ): DeckAssembly {
-  const { kit, modules, minInstances } = resolveOptions(options)
+  const { kit, modules, minInstances, wearDensity } = resolveOptions(options)
 
   const rooms = deck.modules.map((ref, index) =>
     placeModule(
@@ -230,7 +240,10 @@ export function assembleDeck(
 
   const scan = scanDeckSockets(placed)
   const seams = seamPlansForDeck(placed, scan, deckIndex, deck.id)
-  const parts = placedPartsOf({ modules: placed, seams })
+  // M4-T4: the worn detail is seeded by the SPEC's seed (PRD §6) and derived
+  // from the rooms' own wall panels, light sockets and deck plates.
+  const wear = wearPlansForDeck(placed, deckIndex, deck.id, seed, wearDensity)
+  const parts = placedPartsOf({ modules: placed, seams, wear })
   const { groups, batches } = partitionParts(parts, deckIndex, minInstances)
 
   const node: DeckNode = {
@@ -240,9 +253,10 @@ export function assembleDeck(
     geometry: groups.map((plan) => plan.group),
     instances: batches.map((plan) => plan.batch),
     interactives: interactivesOf(placed, deck.id),
-    // M3-T3: the modules' own hints placed, plus the generated seam geometry
-    // that must block a walker (M3-T2's blanking plugs) — see collision.ts.
-    collision: { boxes: deckHullBoxes(placed, seams) },
+    // M3-T3: the modules' own hints placed, plus the generated geometry that
+    // must block a walker — M3-T2's blanking plugs and M4-T4's worn detail —
+    // see collision.ts.
+    collision: { boxes: deckHullBoxes(placed, seams, wear) },
   }
 
   return {
@@ -256,6 +270,7 @@ export function assembleDeck(
     joins: scan.joins,
     blanks: scan.blanks,
     seams,
+    wear,
     groups,
     batches,
   }
@@ -275,15 +290,16 @@ export function assembleShip(
   spec: ShipSpec,
   options: AssembleOptions = {},
 ): ShipAssembly {
-  const { kit, requireValidSpec } = resolveOptions(options)
+  const { kit, requireValidSpec, wearDensity } = resolveOptions(options)
   if (requireValidSpec) assertValidShipSpec(spec, kit)
 
   const decks = spec.decks.map((deck, deckIndex) =>
-    assembleDeck(deck, deckIndex, options),
+    assembleDeck(deck, deckIndex, options, spec.seed),
   )
 
   return {
     spec,
+    wearDensity,
     graph: {
       ship: {
         classId: spec.classId,

@@ -57,14 +57,15 @@ The deck geometry partition the assembler emits (`groups` = merged per-slot geom
 instanced moulds) is exactly the draw-call plan: `src/player/deckGeometry.ts` builds ONE merged
 `BufferGeometry` per group and ONE mould + placements per batch, and `ShipInterior`
 (`src/player/WalkthroughScene.tsx`) mounts one mesh / one `InstancedMesh` for each. Before M3-T7
-the decks were drawn one mesh per part (736 calls on Patrol); now Patrol draws **179 calls for 736
-parts**, Vagabond 213, Surveyor 181, the QA rig 194 — all under the PRD §10 ceiling of **250**
-(`DRAW_CALL_CEILING`, `src/assembler/drawCalls.ts`). `drawCallTally()` / `drawCallProblems()` are
-the report surface, the ceiling is checked by the assembler gate (rule 12), and the numbers above
-are pinned on every deck of all four ships in `src/assembler/drawCalls.test.ts` +
-`src/player/deckGeometry.test.ts` (which also proves each instanced mould + placement reproduces
-its world part, so the swap cannot move geometry). The `minInstances` assembler option is the one
-knob that trades calls for instancing.
+the decks were drawn one mesh per part (736 calls on Patrol); now Patrol draws **186 calls for 772
+parts** (the M4-T4 worn detail included), Vagabond 221, Surveyor 185, the QA rig 204 — all under the
+PRD §10 ceiling of **250** (`DRAW_CALL_CEILING`, `src/assembler/drawCalls.ts`). `drawCallTally()` /
+`drawCallProblems()` are the report surface, the ceiling is checked by the assembler gate (rule 12),
+and the numbers above are pinned on every deck of all four ships in
+`src/assembler/drawCalls.test.ts` + `src/player/deckGeometry.test.ts` (which also proves each
+instanced mould + placement reproduces its world part, so the swap cannot move geometry). The
+`minInstances` assembler option is the one knob that trades calls for instancing; `wearDensity:
+'off'` is the other, and it reproduces the pre-M4-T4 numbers (Patrol 736 parts / 179 calls).
 
 ## Material sets (M4-T1)
 
@@ -80,7 +81,7 @@ the registry does not know or one declared for another slot, and `npm run check:
 registry covers every slot exactly once. `src/kit/render/slotSurfaces.ts` is the slot → shading
 bridge (theme-driven, no colour left in the kit) and `materialSetReport(ship)` reports per-slot
 parts + draw calls for an assembled ship. Measured: all four canonical ships draw **9/9 slots**
-(Patrol 736 parts / 179 calls shaded from theme `firebrand`).
+(Patrol 772 parts / 186 calls shaded from theme `firebrand`).
 
 ## Practical lighting (M4-T2)
 
@@ -99,6 +100,25 @@ deck keeping landmarks and work lights before ceiling fill), and `lightRigReport
 is the number the M4 gate reads. Measured: Patrol **43 fixtures** (28 panel + 6 task + 8 screen +
 1 reactor) over 5 decks, 10 mounted at once, 5 shadow-casting; Vagabond 51, Surveyor 44. The one
 fill is warm and dim (`#4a443c` @ 0.28) and capped, so it can never flatten the interior.
+
+## Worn detail (M4-T4)
+
+`src/wear/` is the pass that makes the ship read as *lived in* (PRD §4 mood, §6 seed control):
+**paint patches**, **cable routing** and **floor clutter**, authored once in `recipes.ts` as a small
+vocabulary and GENERATED per ship from `ShipSpec.seed` (mulberry32 + an FNV-1a stream per deck /
+module / facet — the same seed always yields the same ship, a different seed a different one).
+Nothing is freehand (rule 8): a patch is painted on a `bulkhead` panel the module already draws, a
+cable drops from one of the module's own light sockets down a wall it already has, and a prop rests
+on the deck plate against that wall — `mounts.ts` derives every surface from the module instance,
+and `checks.ts` RE-MEASURES the emitted world geometry (mounted/touching, inside its module, clear
+of foreign kit + seam geometry and of every doorway's keep-clear zone, solid, and under the M3-T4
+walk-over step so clutter is stepped over rather than walling the ship off). It draws only the nine
+§4 slots and never the reserved `coffee-accent`. The gate (`wearProblems`) rides the assembler as
+**rule 13** and is empty on all four canonical ships. Density is PRD §10's fourth degradation rung
+(`AssembleOptions.wearDensity`: `full` → `reduced` → `off`, the last being the pre-M4-T4 ship and
+the baseline the pass's cost is measured against): Patrol's 29 plans / 36 parts cost **7 draw
+calls** (186 with the pass, 179 without; per-deck ≤ the 8-call budget), and `wearReport(ship)` prints
+the whole ledger.
 
 ## Status
 

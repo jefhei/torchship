@@ -19,7 +19,12 @@
  *     `seamSolidParts` reads — while a join's sleeve is the wall annulus,
  *     already covered by the wall parts' own boxes, and a hatch leaf is
  *     interactive geometry whose collision belongs to the M3-T5 state machine,
- *     so neither contributes a static box.
+ *     so neither contributes a static box; then
+ *  3. the GENERATED worn detail of M4-T4 (`WearPlan.solid === true` — every
+ *     facet: paint patches, cable routes and loose clutter stand in the
+ *     walker's volume, so `wearSolidParts` is what the hull reads). A detail
+ *     with no box would be geometry the walker walks through, which is exactly
+ *     what `src/wear/checks.ts` refuses to hide.
  *
  * Three measurements, one verdict (`collisionProblems`, `collisionTally`):
  *
@@ -61,6 +66,7 @@ import type {
   PlacedPart,
   SeamPlan,
   ShipAssembly,
+  WearPlan,
 } from './types'
 
 /**
@@ -109,7 +115,7 @@ function mm(meters: number): number {
 const DEVIATION_EPS_M = 1e-9
 
 /** Where one hull box came from. */
-export type HullBoxOrigin = 'module' | 'seam'
+export type HullBoxOrigin = 'module' | 'seam' | 'wear'
 
 /** One box of a deck's collision hull, with the geometry it must stand for. */
 export interface HullBox {
@@ -163,6 +169,8 @@ export interface DeckCollisionTally {
   moduleBoxes: number
   /** Boxes from generated solid seam parts (M3-T2's plugs). */
   seamBoxes: number
+  /** Boxes from generated solid worn detail (M4-T4). */
+  wearBoxes: number
   boxes: number
   /** Joins whose pass-through the deck's hull must leave clear. */
   joins: number
@@ -178,6 +186,7 @@ export interface CollisionTally {
   boxes: number
   moduleBoxes: number
   seamBoxes: number
+  wearBoxes: number
   joins: number
   maxDeviationM: number
   maxIntrusionM: number
@@ -189,19 +198,33 @@ export function hullLabel(entry: HullBox): string {
     entry.source.moduleIndex === -1
       ? `${entry.source.moduleId} band`
       : `${entry.source.moduleId}#${entry.source.moduleIndex}`
-  return entry.origin === 'module'
-    ? `${owner} solid part ${entry.partIndex}`
-    : `generated plug ${entry.planId ?? '?'} (${owner})`
+  if (entry.origin === 'module') return `${owner} solid part ${entry.partIndex}`
+  if (entry.origin === 'wear') {
+    return `generated wear detail ${entry.planId ?? '?'} (${owner})`
+  }
+  return `generated plug ${entry.planId ?? '?'} (${owner})`
+}
+
+/**
+ * The solid wear parts of a deck (M4-T4): the generated detail that must block
+ * a walker — every facet, because every facet stands in the room (the same
+ * predicate the plans' own `solid` flag carries, read here so the hull and the
+ * gate can never disagree).
+ */
+export function wearSolidParts(deck: Pick<DeckAssembly, 'wear'>): PlacedPart[] {
+  return deck.wear.filter((plan) => plan.solid === true).flatMap((plan) => plan.parts)
 }
 
 /**
  * The deck's hull, box by box, with the geometry each box stands for: the
  * modules' own hints placed (one box per solid part, in module order — rooms
- * then the synthesized shaft band), then the generated solid seam parts.
+ * then the synthesized shaft band), then the generated solid seam parts, then
+ * the generated solid worn detail (M4-T4).
  */
 export function deckHull(
   modules: readonly PlacedModule[],
   seams: readonly SeamPlan[],
+  wear: readonly WearPlan[] = [],
 ): HullBox[] {
   const hull: HullBox[] = []
   for (const owner of modules) {
@@ -234,6 +257,19 @@ export function deckHull(
       })
     })
   }
+  for (const plan of wear) {
+    if (plan.solid !== true) continue
+    plan.parts.forEach((part, partIndex) => {
+      hull.push({
+        box: partBounds(part.part),
+        part,
+        source: part.source,
+        origin: 'wear',
+        partIndex,
+        planId: plan.id,
+      })
+    })
+  }
   return hull
 }
 
@@ -241,8 +277,9 @@ export function deckHull(
 export function deckHullBoxes(
   modules: readonly PlacedModule[],
   seams: readonly SeamPlan[],
+  wear: readonly WearPlan[] = [],
 ): Aabb3[] {
-  return deckHull(modules, seams).map((entry) => entry.box)
+  return deckHull(modules, seams, wear).map((entry) => entry.box)
 }
 
 /** The visible geometry a module's own hint boxes must account for, in order. */
@@ -345,7 +382,7 @@ export function passageIntrusions(
 export function deckCollisionProblems(deck: DeckAssembly): string[] {
   const problems: string[] = []
   const where = `deck ${deck.deckIndex} ("${deck.deckId}")`
-  const hull = deckHull(deck.modules, deck.seams)
+  const hull = deckHull(deck.modules, deck.seams, deck.wear)
 
   for (const owner of deck.modules) {
     const solid = solidPartsOfModule(owner)
@@ -399,7 +436,7 @@ export function collisionProblems(ship: ShipAssembly): string[] {
 
 /** Per-deck collision tallies (boxes, joins, largest deviation + intrusion). */
 export function deckCollisionTally(deck: DeckAssembly): DeckCollisionTally {
-  const hull = deckHull(deck.modules, deck.seams)
+  const hull = deckHull(deck.modules, deck.seams, deck.wear)
   let maxDeviationM = 0
   for (const entry of hull) {
     if (entry.part === undefined) continue
@@ -414,6 +451,7 @@ export function deckCollisionTally(deck: DeckAssembly): DeckCollisionTally {
     deckId: deck.deckId,
     moduleBoxes: hull.filter((entry) => entry.origin === 'module').length,
     seamBoxes: hull.filter((entry) => entry.origin === 'seam').length,
+    wearBoxes: hull.filter((entry) => entry.origin === 'wear').length,
     boxes: hull.length,
     joins: deck.joins.length,
     maxDeviationM: n0(maxDeviationM),
@@ -431,6 +469,7 @@ export function collisionTally(ship: ShipAssembly): CollisionTally {
     boxes: decks.reduce((sum, deck) => sum + deck.boxes, 0),
     moduleBoxes: decks.reduce((sum, deck) => sum + deck.moduleBoxes, 0),
     seamBoxes: decks.reduce((sum, deck) => sum + deck.seamBoxes, 0),
+    wearBoxes: decks.reduce((sum, deck) => sum + deck.wearBoxes, 0),
     joins: decks.reduce((sum, deck) => sum + deck.joins, 0),
     maxDeviationM: n0(
       decks.reduce((max, deck) => Math.max(max, deck.maxDeviationM), 0),

@@ -368,12 +368,14 @@ export const checkSeamsWatertight: InvariantCheck = (spec: ShipSpec) => {
  * §8 bullet 4 live check (LIVE at M3-T3). "Collision hull matches visible
  * geometry within 10 cm per deck" — measured on the ASSEMBLED ship: the deck
  * hull is the modules' own collision hints placed (one box per solid part,
- * M2) plus the generated blanking plugs (M3-T2), and this check reads the
- * assembler's verdict on it (src/assembler/collision.ts) — every hull box is
- * accounted for one-for-one with the geometry it stands for, differs from it
- * by ≤ 10 cm in both directions (uncovered: a clippable wall; excess: an
- * invisible wall), and stands clear of every door-socket pass-through (the
- * walker can pass between mated modules).
+ * M2) plus the generated blanking plugs (M3-T2) plus the generated worn
+ * detail (M4-T4 — every facet stands in the walker's volume, so every wear
+ * part is solid), and this check reads the assembler's verdict on it
+ * (src/assembler/collision.ts) — every hull box is accounted for one-for-one
+ * with the geometry it stands for, differs from it by ≤ 10 cm in both
+ * directions (uncovered: a clippable wall; excess: an invisible wall), and
+ * stands clear of every door-socket pass-through (the walker can pass between
+ * mated modules).
  *
  * Like the seams check it assembles the spec itself (the harness hands checks
  * a spec, not a ship), with the validator gate off so a REJECTED rig still
@@ -404,7 +406,8 @@ export const checkCollisionMatch: InvariantCheck = (spec: ShipSpec) => {
     detail:
       `every deck's hull matches its visible geometry: ${tally.boxes} box(es) ` +
       `(${tally.moduleBoxes} placed module hint${tally.moduleBoxes === 1 ? '' : 's'} + ` +
-      `${tally.seamBoxes} generated plug${tally.seamBoxes === 1 ? '' : 's'}) over ` +
+      `${tally.seamBoxes} generated plug${tally.seamBoxes === 1 ? '' : 's'} + ` +
+      `${tally.wearBoxes} wear box${tally.wearBoxes === 1 ? '' : 'es'}) over ` +
       `${tally.decks.length} deck${tally.decks.length === 1 ? '' : 's'}, max deviation ` +
       `${(tally.maxDeviationM / MM).toFixed(1)} mm (cap ≤ ${capMm} mm per deck), and all ` +
       `${tally.joins} door-socket pass-through${tally.joins === 1 ? '' : 's'} left clear of ` +

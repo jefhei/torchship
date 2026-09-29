@@ -212,14 +212,22 @@ describe('the frame budget at the renderer', () => {
     }
   })
 
-  it("pins Patrol's plan at 179 calls over 736 parts (the M3 gate number)", () => {
+  it("pins Patrol's plan at 186 calls over 772 parts (the M3 gate number, worn detail included)", () => {
     const ship = shipOf(SHIP_FIXTURES[0])
     expect(ship.spec.name).toBe('Firebrand')
     const calls = ship.decks.reduce((sum, deck) => sum + deckDrawPlan(deck).length, 0)
     const parts = ship.decks.reduce((sum, deck) => sum + placedPartsOf(deck).length, 0)
-    expect(parts).toBe(736)
-    expect(calls).toBe(179)
+    expect(parts).toBe(772)
+    expect(calls).toBe(186)
     expect(parts / calls).toBeGreaterThan(4) // the merge/instance win
+    // The pre-M4-T4 ship is one density rung away (the pass’s own baseline).
+    const bare = assembleShip(SHIP_FIXTURES[0].spec, { wearDensity: 'off' })
+    expect(bare.decks.reduce((sum, deck) => sum + placedPartsOf(deck).length, 0)).toBe(
+      736,
+    )
+    expect(bare.decks.reduce((sum, deck) => sum + deckDrawPlan(deck).length, 0)).toBe(
+      179,
+    )
   })
 })
 

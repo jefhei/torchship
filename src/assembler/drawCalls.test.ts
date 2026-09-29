@@ -95,11 +95,11 @@ describe('drawCallRows', () => {
         row.calls,
       ]),
     ).toEqual([
-      ['head', 116, 9, 107, 5, 30, 35],
-      ['crew', 145, 25, 120, 6, 32, 38],
-      ['ops', 136, 26, 110, 6, 30, 36],
-      ['engineering', 143, 33, 110, 7, 29, 36],
-      ['aft', 196, 14, 182, 5, 29, 34],
+      ['head', 121, 12, 109, 6, 31, 37],
+      ['crew', 152, 30, 122, 6, 33, 39],
+      ['ops', 144, 34, 110, 6, 30, 36],
+      ['engineering', 151, 39, 112, 8, 30, 38],
+      ['aft', 204, 22, 182, 7, 29, 36],
     ])
     expect(rows.map((row) => row.label)).toEqual([
       'Head — bridge',
@@ -137,10 +137,10 @@ describe('drawCallTally', () => {
       ]
     })
     expect(measured).toEqual([
-      ['patrol', 179, 71, 'crew', 38],
-      ['long-haul', 213, 37, 'crew', 38],
-      ['science', 181, 69, 'crew', 38],
-      ['stress', 194, 56, 'rig-3', 51],
+      ['patrol', 186, 64, 'crew', 39],
+      ['long-haul', 221, 29, 'crew', 40],
+      ['science', 185, 65, 'crew', 39],
+      ['stress', 204, 46, 'rig-3', 55],
     ])
     for (const fixture of SHIP_FIXTURES) {
       const tally = drawCallTally(shipOf(fixture))
@@ -152,15 +152,15 @@ describe('drawCallTally', () => {
   it('names the ship and reports the budget arithmetic', () => {
     const tally = drawCallTally(assembleShip(PATROL_SPEC))
     expect(tally.ship).toBe('Firebrand')
-    expect(tally.total).toBe(179)
-    expect(tally.headroom).toBe(DRAW_CALL_CEILING - 179)
+    expect(tally.total).toBe(186)
+    expect(tally.headroom).toBe(DRAW_CALL_CEILING - 186)
     expect(tally.rows).toHaveLength(5)
   })
 
-  it('honours an injected ceiling (the budget M4 adds clutter against)', () => {
+  it('honours an injected ceiling (the budget M4 measures its passes against)', () => {
     const tally = drawCallTally(assembleShip(SCIENCE_SPEC), 200)
     expect(tally.ceiling).toBe(200)
-    expect(tally.headroom).toBe(19)
+    expect(tally.headroom).toBe(15)
   })
 })
 
@@ -173,29 +173,38 @@ describe('drawCallProblems', () => {
 
   it('passes a ship sitting exactly ON the ceiling (≤ 250, not < 250)', () => {
     const patrol = assembleShip(PATROL_SPEC)
-    expect(drawCallProblems(patrol, 179)).toEqual([])
+    expect(drawCallProblems(patrol, 186)).toEqual([])
   })
 
   it('reports the ship total and the worst deck when the budget is blown', () => {
-    const problems = drawCallProblems(assembleShip(PATROL_SPEC), 178)
+    const problems = drawCallProblems(assembleShip(PATROL_SPEC), 185)
     expect(problems).toHaveLength(1)
     expect(problems[0]).toMatch(
-      /ship "Firebrand" draws 179 draw call\(s\) — over the 178-call ceiling \(§10, after merging \+ instancing\) \(worst deck 1 "crew" at 38\)/,
+      /ship "Firebrand" draws 186 draw call\(s\) — over the 185-call ceiling \(§10, after merging \+ instancing\) \(worst deck 1 "crew" at 39\)/,
     )
   })
 
-  it('names a single over-ceiling deck, not just the ship', () => {
+  it('names the over-ceiling decks, not just the ship', () => {
     const problems = drawCallProblems(assembleShip(PATROL_SPEC), 36)
-    expect(problems).toHaveLength(2)
-    expect(problems[0]).toMatch(/draws 179 draw call\(s\) — over the 36-call ceiling/)
-    expect(problems[1]).toMatch(
-      /deck 1 \("crew"\) draws 38 draw call\(s\) — over the 36-call ceiling on its own/,
-    )
+    // The ship total, then each deck that costs more than 36 on its own: head
+    // 37, crew 39, engineering 38 (ops and aft each sit exactly on 36 — legal).
+    expect(problems).toHaveLength(4)
+    expect(problems[0]).toMatch(/draws 186 draw call\(s\) — over the 36-call ceiling/)
+    expect(problems.slice(1)).toEqual([
+      'deck 0 ("head") draws 37 draw call(s) — over the 36-call ceiling on its own',
+      'deck 1 ("crew") draws 39 draw call(s) — over the 36-call ceiling on its own',
+      'deck 3 ("engineering") draws 38 draw call(s) — over the 36-call ceiling on its own',
+    ])
+    // A ceiling no deck exceeds leaves only the ship-total finding.
+    expect(drawCallProblems(assembleShip(PATROL_SPEC), 39)).toEqual([
+      'ship "Firebrand" draws 186 draw call(s) — over the 39-call ceiling ' +
+        '(§10, after merging + instancing) (worst deck 1 "crew" at 39)',
+    ])
   })
 
   it('measures the QA rig too (a rejected spec still gets a budget verdict)', () => {
     const rig = assembleShip(STRESS_SPEC, { requireValidSpec: false })
-    expect(drawCallTally(rig).total).toBe(194)
+    expect(drawCallTally(rig).total).toBe(204)
     expect(drawCallProblems(rig)).toEqual([])
   })
 })
@@ -211,32 +220,32 @@ describe('the assembler gate carries the ceiling (rule 12)', () => {
     }
   })
 
-  it('fails an over-ceiling partition: no merging at all is 257 calls on Patrol', () => {
+  it('fails an over-ceiling partition: no merging at all is 290 calls on Patrol', () => {
     // `minInstances: 1` gives every distinct mould its own batch — merging
     // turned off (the pre-M3-T7 shape of the problem: one mesh per part).
     const perPart = assembleShip(PATROL_SPEC, { minInstances: 1 })
     const tally = drawCallTally(perPart)
-    expect(tally.total).toBe(257)
-    expect(tally.headroom).toBe(DRAW_CALL_CEILING - 257)
+    expect(tally.total).toBe(290)
+    expect(tally.headroom).toBe(DRAW_CALL_CEILING - 290)
     expect(tally.rows.every((row) => row.groups === 0)).toBe(true)
 
     const problems = assemblyProblems(perPart, 1)
     expect(problems).toContain(
-      'ship "Firebrand" draws 257 draw call(s) — over the 250-call ceiling ' +
-        '(§10, after merging + instancing) (worst deck 3 "engineering" at 62)',
+      'ship "Firebrand" draws 290 draw call(s) — over the 250-call ceiling ' +
+        '(§10, after merging + instancing) (worst deck 3 "engineering" at 69)',
     )
-    expect(problems.filter((problem) => /on its own/.test(problem))).toEqual([]) // 62 < 250: the failure is the ship's total, not one deck's
+    expect(problems.filter((problem) => /on its own/.test(problem))).toEqual([]) // 69 < 250: the failure is the ship's total, not one deck's
     // The clean default partition of the same ship stays clean.
     expect(assemblyProblems(assembleShip(PATROL_SPEC))).toEqual([])
   })
 })
 
 describe('the long-haul stretch is the tightest ship', () => {
-  it('stays under the ceiling with 37 calls of headroom', () => {
+  it('stays under the ceiling with 29 calls of headroom', () => {
     const tally = drawCallTally(assembleShip(LONG_HAUL_SPEC))
     expect(tally.rows).toHaveLength(6)
-    expect(tally.total).toBe(213)
-    expect(tally.headroom).toBe(37)
+    expect(tally.total).toBe(221)
+    expect(tally.headroom).toBe(29)
     expect(drawCallProblems(assembleShip(LONG_HAUL_SPEC))).toEqual([])
   })
 })

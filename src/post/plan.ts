@@ -20,7 +20,7 @@
  * Both thresholds are authored constants and both are measured on all four
  * canonical fixtures in the tests. The measured outcome is the interesting part:
  * the three real ships afford AO (their worst deck mounts 10 of 12 fixtures,
- * their draw calls leave 37+ of margin) and the QA rig does NOT — its rig-3 deck
+ * their draw calls leave 29 or more of margin) and the QA rig does NOT — its rig-3 deck
  * hosts two rooms and mounts the full 12, so `ssaoAffordableIn` says no and the
  * plan drops the pass on the ship that is already over budget. That is "SSAO
  * only if budget allows" happening to a real fixture rather than to a synthetic
@@ -51,7 +51,8 @@ import {
 
 /**
  * Draw-call margin the scene must still have before a full-screen pass is
- * affordable. Patrol leaves 71 (§10) — the pass is paid for out of that margin.
+ * affordable. Patrol leaves 64 (§10, drawn with the M4-T4 worn detail) — the
+ * pass is paid for out of that margin.
  */
 export const POST_SSAO_MIN_CALL_HEADROOM = 24
 

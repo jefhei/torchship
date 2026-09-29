@@ -225,6 +225,71 @@ export interface SeamPlan {
   problems: string[]
 }
 
+/* --------------------------------------------------------------- M4-T4 wear */
+
+/** The three facets of the M4-T4 worn-detail pass (PRD §6). */
+export type WearFacet = 'paint' | 'cable' | 'clutter'
+
+/**
+ * The worn-detail density rungs (PRD §10's degradation ladder, rung 4:
+ * "prop/clutter density"). The per-module counts live in
+ * src/wear/recipes.ts — the assembler only carries the knob.
+ */
+export type WearDensity = 'full' | 'reduced' | 'off'
+
+/**
+ * What a generated detail is mounted ON: a part of the module instance it
+ * decorates, module-local addressed. A wall detail (paint patch, cable drop,
+ * saddle) is flush or tangent to the mount panel's inner face; a floor prop
+ * rests on the deck plate, so its mount is the plate part and `kind` is
+ * 'floor'.
+ */
+export interface WearMount {
+  kind: 'wall' | 'floor'
+  /** Index into the owner module instance's own part list (build order). */
+  partIndex: number
+  /**
+   * For a floor prop, the wall panel its back is stowed against (the prop's
+   * base rests on the deck plate — `partIndex` — and its back touches this
+   * panel; the gate measures both).
+   */
+  backPartIndex?: number
+  /** Axis the mount face's normal runs along (wall mounts only). */
+  normalAxis?: 0 | 2
+  /** Module-local coordinate of the mount face along that axis (walls only). */
+  faceCoord?: number
+  /** Which side of the face the room is on: the direction the detail stands (walls only). */
+  inward?: 1 | -1
+}
+
+/**
+ * One generated worn-detail group (M4-T4): clutter, a paint patch or a cable
+ * route, DERIVED from the module instance it decorates (its own wall panels,
+ * light sockets and deck plate) and seeded by the ship spec's `seed`, never
+ * freehand. `parts` are world parts already part of the deck's geometry
+ * partition; `solid` marks the plans whose geometry must block a walker
+ * (every facet does — see src/wear/checks.ts).
+ */
+export interface WearPlan {
+  /** Stable id (`deck-${deckIndex}-wear-${moduleIndex}-${facet}-${n}`). */
+  id: string
+  facet: WearFacet
+  deckIndex: number
+  deckId: string
+  /** The module instance the detail decorates. */
+  source: ModuleSource
+  /** The authored variant id (`repaint` / `cable-drop` / `spares-crate`, …). */
+  variant: string
+  /** The module-local part the detail is mounted on. */
+  mount: WearMount
+  /** The seed the plan's placement stream was derived from (report/debug key). */
+  seed: number
+  /** True when the geometry must block a walker (all M4-T4 facets are solid). */
+  solid: boolean
+  /** Generated world parts (already part of the deck's geometry partition). */
+  parts: PlacedPart[]
+}
+
 /** One merged geometry group plus the parts it merges (one draw call). */
 export interface GroupPlan {
   group: GeometryGroup
@@ -261,6 +326,8 @@ export interface DeckAssembly {
   blanks: PlacedDoor[]
   /** The seam pass (M3-T2): mating geometry + watertight verdict per socket. */
   seams: SeamPlan[]
+  /** The worn-detail pass (M4-T4): seeded clutter / paint patches / cabling. */
+  wear: WearPlan[]
   /** The geometry partition behind `node.geometry`. */
   groups: GroupPlan[]
   /** The instancing partition behind `node.instances`. */
@@ -281,6 +348,8 @@ export interface SpineBandRun {
 /** The assembler's full output: the scene graph plus its provenance model. */
 export interface ShipAssembly {
   spec: ShipSpec
+  /** The worn-detail density the ship was assembled with (M4-T4). */
+  wearDensity: WearDensity
   /** The M1-T2 scene graph the renderer attaches geometry to. */
   graph: SceneGraph
   decks: DeckAssembly[]
@@ -310,4 +379,11 @@ export interface AssembleOptions {
    * to inspect what the assembler does with a rejected spec.
    */
   requireValidSpec?: boolean
+  /**
+   * Worn-detail density (M4-T4): how many clutter / paint-patch / cable-route
+   * details each module instance carries. Default `DEFAULT_WEAR_DENSITY`
+   * ('full'); `'off'` is the pre-M4-T4 ship, which is also the baseline the
+   * pass's draw-call cost is measured against (src/wear/report.ts).
+   */
+  wearDensity?: WearDensity
 }
