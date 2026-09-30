@@ -125,3 +125,146 @@
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
+
+/* ---------------------------------------------------------------------------
+   M5-T1 wayfinding UX: the per-deck label moment, the optional deck indicator
+   (bow at the top — the stack reads the way the ship does under burn) and the
+   hatch affordance naming what E will do.
+   --------------------------------------------------------------------------- */
+
+.wayfinding {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  pointer-events: none;
+  user-select: none;
+}
+
+.deck-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 148px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #7d8694;
+  background: rgba(10, 12, 15, 0.6);
+  border: 1px solid #23272e;
+  border-radius: 3px;
+  padding: 6px 10px;
+}
+
+.deck-indicator-caption {
+  color: #9aa4b2;
+  border-bottom: 1px solid #23272e;
+  padding-bottom: 4px;
+  margin-bottom: 3px;
+}
+
+.deck-indicator-stack {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* The stack reads top = bow, bottom = drive: the ship's own order. */
+.deck-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 4px;
+  border-left: 2px solid transparent;
+}
+
+.deck-row-current {
+  color: #d3a860;
+  border-left-color: #d3a860;
+  background: rgba(211, 168, 96, 0.08);
+}
+
+.deck-row-ladder {
+  margin-left: auto;
+  color: #5f6b58;
+}
+
+.deck-indicator-hint {
+  color: #4c545f;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding-top: 3px;
+}
+
+.deck-moment {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #9aa4b2;
+  background: rgba(12, 10, 7, 0.78);
+  border: 1px solid #3a3120;
+  border-radius: 3px;
+  padding: 6px 12px;
+}
+
+.deck-moment-title {
+  color: #d3a860;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.deck-moment-detail {
+  color: #e8eaed;
+}
+
+.deck-moment-aboard {
+  color: #8b93a1;
+  font-size: 11px;
+}
+
+.deck-moment-arrival {
+  color: #6f7a86;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.hatch-affordance {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  background: rgba(12, 10, 7, 0.72);
+  border: 1px solid #3a3120;
+  border-radius: 3px;
+  padding: 5px 10px;
+}
+
+.hatch-affordance-action {
+  color: #e8eaed;
+}
+
+.hatch-affordance-detail {
+  color: #6f7a86;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.hatch-blocked {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #c98b6b;
+  background: rgba(18, 10, 8, 0.75);
+  border: 1px solid #4a2a20;
+  border-radius: 3px;
+  padding: 3px 10px;
+}

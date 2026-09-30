@@ -120,6 +120,33 @@ the baseline the pass's cost is measured against): Patrol's 29 plans / 36 parts 
 calls** (186 with the pass, 179 without; per-deck ≤ the 8-call budget), and `wearReport(ship)` prints
 the whole ledger.
 
+## Wayfinding UX (M5-T1)
+
+`src/wayfinding/` is the deck/wayfinding UX (BUILD_PLAN M5-T1, PRD §8's "deck-order logic is
+legible" / §11 risk 1 — a metal interior that reads as sameness). Three pieces, all DOM over the
+canvas (never three objects), all derived from the assembly so a sign can never drift from the ship:
+
+- **Per-deck label moments** (`moments.ts`) — the sign raised on a deck transition (the first report
+  of a session, a climb arrival, a fall): `DECK 1 · Crew deck`, the deck's own spec label, what is
+  aboard it (the modules' own kit-manifest labels) and how you got there, in the ship's own
+  direction — decks descend nose → aft in index and Y, so a LOWER index is **up** under burn
+  (`up the ladder from Ops deck — toward the bow`). It holds `MOMENT_HOLD_MS` (4 s) and clears.
+- **Optional deck indicator** (`indicator.ts`) — the whole ship as one stack, bow at the top, the
+  walker's deck flagged, and ladder marks (▲/▼) taken from **M3-T5's own run list**, so no row
+  promises a climb the ship cannot make. Toggled with **`I`** (`INDICATOR_TOGGLE_KEY`) — optional by
+  key, on by default.
+- **Hatch affordances** (`affordances.ts`) — the prompt names the hatch in reach *and what E will
+  do* (`E — open the spine hatch` / `E — close the spine hatch`), from the hatch's own record and
+  the new `hatchPromptOpen` field the rig reports (`NavStep.hatchPromptOpen`, `WalkReport`). The
+  reach test stays `hatchInReach` — the one the state machine uses — so the prompt can never name a
+  hatch E would not act on.
+
+`wayfindingProblems(ship, world)` (`checks.ts`) is the product gate — every deck has a name and a
+room to name, the stack covers every deck in ship order with exactly one current row, every ladder
+mark is backed by a run, and every hatch has a unique id and the right verb for its state. It is
+empty on all four canonical ships (the QA rig's defects are geometry, never wayfinding) and is NOT a
+§8 verdict (the M4-T2/T4 precedent).
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every

@@ -58,6 +58,7 @@ import {
   hatchBlockerBoxes,
   hatchInReach,
   hatchesOf,
+  isHatchOpen,
   toggleHatch,
   type Hatch,
   type HatchAction,
@@ -175,6 +176,13 @@ export interface NavStep {
   arrived: boolean
   /** The hatch the interact key could act on right now (HUD prompt), or null. */
   hatchPrompt: Hatch | null
+  /**
+   * Whether that prompted hatch is currently OPEN — i.e. whether the next
+   * interact press will CLOSE it. False when nothing is in reach. M5-T1's
+   * affordance reads this to name the action ("E — open the spine hatch")
+   * instead of offering an ambiguous "open or close".
+   */
+  hatchPromptOpen: boolean
   /** What the interact key did this frame, if anything. */
   hatchAction: HatchAction | null
   /** The hatch the interact key acted on, if any. */
@@ -238,6 +246,7 @@ function stepWalkFrame(
     step.state.feet,
     command.yaw,
   )
+  const hatchPromptOpen = hatchPrompt !== null && isHatchOpen(open, hatchPrompt)
   const nextState: NavState = { phase: 'walk', walker: step.state, climb: null, open }
   return {
     state: nextState,
@@ -257,6 +266,7 @@ function stepWalkFrame(
     depenetrations: step.depenetrations,
     ...WALKING_CLIMB_FIELDS,
     hatchPrompt,
+    hatchPromptOpen,
     hatchAction,
     hatchTarget,
   }
@@ -304,6 +314,7 @@ function stepClimbFrame(
     rungIndex: step.rungIndex,
     arrived: step.arrived,
     hatchPrompt: null,
+    hatchPromptOpen: false,
     hatchAction: null,
     hatchTarget: null,
   }

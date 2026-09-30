@@ -67,6 +67,23 @@ describe('Viewport walkthrough UI (M3-T4)', () => {
     expect(hud).toHaveTextContent('Shift sprint')
     expect(hud).toHaveTextContent('Ctrl crouch')
     expect(hud).toHaveTextContent('ESC release')
+    // M5-T1: the legend names the optional deck indicator's key too.
+    expect(hud).toHaveTextContent('I deck indicator')
     expect(screen.queryByTestId('walk-lock-prompt')).toBeNull()
+  })
+
+  it('mounts the M5-T1 wayfinding overlay with the walkthrough UI', async () => {
+    render(<Viewport />)
+    await screen.findByTestId('walk-lock-prompt')
+    // Nothing to sign before the walkthrough is entered.
+    expect(screen.queryByTestId('wayfinding')).toBeNull()
+    act(() => setWalkLocked(true))
+    expect(screen.getByTestId('walk-hud')).toBeInTheDocument()
+    expect(screen.getByTestId('wayfinding')).toBeInTheDocument()
+    // No walk report has arrived in jsdom (the rig is not mounted), so the
+    // overlay has nothing to say yet — but it is wired and mounted.
+    expect(screen.queryByTestId('deck-indicator')).toBeNull()
+    act(() => setWalkLocked(false))
+    expect(screen.queryByTestId('wayfinding')).toBeNull()
   })
 })

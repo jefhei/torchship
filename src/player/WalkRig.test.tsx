@@ -334,12 +334,16 @@ describe('the M3-T5 rig: hatches and the climb', () => {
     const atDoor = reports[reports.length - 1]
     expect(atDoor.deckId).toBe('crew')
     expect(atDoor.hatchPromptId).toBe('crew-galley#0-spine-door')
+    // The affordance reads the state off the frame: shut here, so E would open.
+    expect(atDoor.hatchPromptOpen).toBe(false)
     expect(atDoor.hatchAction).toBeNull()
-    // E opens it, and the report says so.
+    // E opens it, and the report says so — and flips the affordance to "close".
     pressKey('KeyE')
     runFrames(1)
     const opened = reports.find((report) => report.hatchAction === 'opened')
     expect(opened).toBeDefined()
+    expect(opened!.hatchPromptOpen).toBe(true)
+    expect(opened!.hatchPromptId).toBe('crew-galley#0-spine-door')
     releaseKey('KeyW')
   })
 
@@ -361,6 +365,12 @@ describe('the M3-T5 rig: hatches and the climb', () => {
     expect(last.phase).toBe('walk')
     expect(last.deckId).toBe('head')
     expect(last.grounded).toBe(true)
+    // The deck transition is reported as one: the arrival frame says so, which
+    // is what the M5-T1 label moment is raised from.
+    const arrival = reports.find((report) => report.arrived && report.deckId === 'head')
+    expect(arrival).toBeDefined()
+    expect(arrival!.landed).toBe(true)
+    expect(arrival!.phase).toBe('walk')
     // The camera is on the head deck's plate, in the lane beside the ladder.
     expect(camera.position.y).toBeCloseTo(CREW_FLOOR_Y + 3.2 + EYE_HEIGHT_M, 3)
     releaseKey('KeyW')

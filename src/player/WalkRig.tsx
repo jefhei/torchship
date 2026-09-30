@@ -53,6 +53,10 @@ export interface WalkReport {
   crouched: boolean
   /** True once a fall has been arrested at the bottom of the spine run. */
   arrested: boolean
+  /** True on the frame the walker touches down after a fall. */
+  landed: boolean
+  /** True on the frame a climb arrives at a landing (a deck transition). */
+  arrived: boolean
   /** 'walk' or 'climb' — which mode the navigation machine is in. */
   phase: NavPhase
   /** While climbing: 'up' nose-ward, 'down' toward the drive, null resting. */
@@ -61,6 +65,8 @@ export interface WalkReport {
   rungIndex: number | null
   /** The hatch the interact key would act on right now, or null. */
   hatchPromptId: string | null
+  /** True when that prompted hatch is open (so the next press will CLOSE it). */
+  hatchPromptOpen: boolean
   /** What the interact key did on this frame, if anything. */
   hatchAction: HatchAction | null
 }
@@ -74,10 +80,13 @@ function reportOf(step: NavStep): WalkReport {
     grounded: step.phase === 'climb' ? true : !step.airborne,
     crouched: step.crouched,
     arrested: step.arrested,
+    landed: step.landed,
+    arrived: step.arrived,
     phase: step.phase,
     climbDirection: step.climbDirection,
     rungIndex: step.rungIndex,
     hatchPromptId: step.hatchPrompt?.id ?? null,
+    hatchPromptOpen: step.hatchPromptOpen,
     hatchAction: step.hatchAction,
   }
 }
@@ -93,9 +102,12 @@ function reportKey(report: WalkReport): string {
     report.climbDirection ?? 'still',
     report.rungIndex ?? '-',
     report.hatchPromptId ?? '-',
+    report.hatchPromptOpen ? 'open' : 'shut',
     // The action is a moment, not a state: it must be reported even when
     // nothing else about the walker changed (opening the hatch you are at).
     report.hatchAction ?? '-',
+    report.arrived ? 'arrived' : '-',
+    report.landed ? 'landed' : '-',
   ].join('|')
 }
 

@@ -119,6 +119,8 @@ describe('the shut hatch is a door (M3-T5 hatch traversal)', () => {
     expect(last.deckId).toBe('crew')
     expect(last.blocked).toBe(true)
     expect(last.hatchPrompt?.id).toBe(CREW_HATCH)
+    // The affordance input: the prompted leaf is shut, so E would OPEN it.
+    expect(last.hatchPromptOpen).toBe(false)
     expect(last.hatchAction).toBeNull()
     // Every frame of the walk stayed on the room side of the leaf: the leaf's
     // box is a wall like any other.
@@ -133,9 +135,12 @@ describe('the shut hatch is a door (M3-T5 hatch traversal)', () => {
     const opened = hold(atDoor, command({ interact: true }), 1)
     expect(opened.steps[0].hatchAction).toBe('opened')
     expect(opened.state.open[CREW_HATCH]).toBe(true)
+    // M5-T1's affordance input: with the leaf retracted, E now CLOSES it.
+    expect(opened.steps[0].hatchPromptOpen).toBe(true)
     // A second press closes it again (the walker is standing clear of the leaf).
     const closed = hold(opened.state, command({ interact: true }), 1)
     expect(closed.steps[0].hatchAction).toBe('closed')
+    expect(closed.steps[0].hatchPromptOpen).toBe(false)
     const reopened = hold(closed.state, command({ interact: true }), 1)
     expect(reopened.steps[0].hatchAction).toBe('opened')
 
@@ -291,10 +296,37 @@ describe('hatches and the walker together (M3-T5)', () => {
     expect(onLadder.phase).toBe('climb')
     const pressed = hold(onLadder, command({ interact: true }), 1)
     expect(pressed.steps[0].hatchPrompt).toBeNull()
+    expect(pressed.steps[0].hatchPromptOpen).toBe(false)
     expect(pressed.steps[0].hatchAction).toBeNull()
     // …and the hatch it is standing beside is untouched.
     expect(pressed.state.open[CREW_HATCH]).toBe(true)
     expect(pressed.state.open[HEAD_HATCH]).toBeUndefined()
+  })
+
+  it('reports what the next interact press will do, in every state (M5-T1 affordance)', () => {
+    // Shut, in reach → open; refused close → still open (the prompt never lies).
+    const atDoor = walk(spawnState(), 40).state
+    const shut = hold(atDoor, command(), 1)
+    expect(shut.steps[0].hatchPrompt?.id).toBe(CREW_HATCH)
+    expect(shut.steps[0].hatchPromptOpen).toBe(false)
+
+    const opened = hold(atDoor, command({ interact: true }), 1).state
+    const openStep = hold(opened, command(), 1)
+    expect(openStep.steps[0].hatchPromptOpen).toBe(true)
+
+    const inDoorway: NavState = {
+      ...opened,
+      walker: { feet: [0, CREW_FLOOR_Y, 0.7], verticalSpeedMps: 0, grounded: true },
+    }
+    const refused = hold(inDoorway, command({ interact: true }), 1)
+    expect(refused.steps[0].hatchAction).toBe('blocked')
+    expect(refused.steps[0].hatchPromptOpen).toBe(true)
+
+    // No hatch in reach → no prompt and nothing claimed about one.
+    const away = hold(atDoor, command({ input: { forward: -1, strafe: 0 } }), 20)
+    const awayStep = away.steps[away.steps.length - 1]
+    expect(awayStep.hatchPrompt).toBeNull()
+    expect(awayStep.hatchPromptOpen).toBe(false)
   })
 
   it('is deterministic: the same journey gives the same state', () => {
