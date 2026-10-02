@@ -147,6 +147,43 @@ mark is backed by a run, and every hatch has a unique id and the right verb for 
 empty on all four canonical ships (the QA rig's defects are geometry, never wayfinding) and is NOT a
 §8 verdict (the M4-T2/T4 precedent).
 
+## Review Loop (M5-T3)
+
+`src/review/loop.ts` runs PRD §14 as a pass over the three M0 canonical ships + the stress spec
+(BUILD_PLAN M5-T3). It derives nothing itself — it is the consumer of every gate the earlier
+milestones built, and it ranks what they find:
+
+| Checklist item | Gate it runs | Severity of a finding |
+|---|---|---|
+| Ship Spec valid | M1-T3 validator (authored kit) | sev-1 |
+| PRD §8 [auto] invariants | M0-T6/M1-T3/M2-T7/M3–T4 harness (all six live) | sev-1 |
+| Assembled-ship integrity | M3/M4 assembler gate (partition, seams, hull, draw calls, wear) | sev-1 (draw-call/clutter budget → sev-2) |
+| Scripted walk (coffee run) | M5-T2 recorder + `walkProblems` | sev-1 |
+| PRD §4 landmarks present | `landmarks.ts` (equipment anchors off the module manifests) | sev-1 |
+| Practical lighting (no dark room) | M4-T2 `lightRigCoverageProblems` + the frame budget | sev-1 / sev-2 |
+| Post processing within budget | M4-T3 `postProblems` | sev-2 |
+| Deck-order legibility | M5-T1 `wayfindingProblems` | sev-2 |
+
+Every defect is logged in PRD §14's shape `{ severity, ship, deck, location, repro }`. The exit rule
+is **zero sev-1; ≤ 5 sev-2** per shippable ship. The stress rig is the **negative control**: it is not
+a shippable ship, so the loop *requires* it to fail (≥ 1 sev-1) — a rig the loop signs off would mean
+the loop is not looking. Measured: Firebrand/Vagabond/Surveyor 0 sev-1 / 0 sev-2 (exit rule met); the
+rig 23 sev-1 / 1 sev-2 (its seeded reject cases all surface through the loop's own checks).
+
+- `landmarks.ts` — the §4 landmark list as data: each landmark names the kit module type and the
+  equipment-slot ids (off the M2 manifests) that prove it, so a module that stops authoring an anchor
+  makes the landmark go missing here too; the spine is judged as a band on every deck + a climbable
+  run.
+- `loop.ts` — `reviewShip(fixture)` / `reviewLoop(fixtures?)` return the structured log; `loopProblems`
+  is the loop's own verdict (every shippable ship passes; the control fails).
+- `qa.ts` — renders the log to **`QA.md`** (PRD §14 step 5) and keeps the file honest: the golden test
+  regenerates it on drift, exactly like the M1-T3 preset files. Run `npm run qa:review` for a focused
+  pass.
+
+The three §8 [review] items that need a human eye (worn-and-warm mood, the fresh-player hallway test,
+onboarding time) are reported as **open human sign-off** items in `QA.md` — never quietly passed. The
+loop is a product gate, not a §8 verdict (the M4-T2/M5-T1 precedent); M5-T4 owns the fix loop.
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every
