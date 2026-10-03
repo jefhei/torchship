@@ -128,6 +128,26 @@ _No defects._
 
 ---
 
+## Fix loop — M5-T4
+
+> PRD §14 step 4: fix, then re-walk only the affected ships. This pass applies
+> the registered fixers to the Review Loop’s defects until the exit rule holds,
+> re-running the loop (the affected ship’s walk included) after each fix. The
+> three canonical ships enter already clean, so the loop converges at pass 0 —
+> no fix is fabricated. The negative control is skipped: a rig that must fail is
+> never repaired.
+
+| Preset | Ship | Passes | Fixes applied | sev-1 | sev-2 | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| Patrol | Firebrand | 0 | — | 0 | 0 | ✅ converged at pass 0 |
+| Long-Haul | Vagabond | 0 | — | 0 | 0 | ✅ converged at pass 0 |
+| Science | Surveyor | 0 | — | 0 | 0 | ✅ converged at pass 0 |
+| Offset-hatch stress | Offspec | — | — | — | — | ⊘ negative control (skipped) |
+
+Registered fixers: `spine-reseat` · `draw-call-ladder` · `wear-density-rung`.
+
+---
+
 ## Human sign-off (open)
 
 The `[review]` items only a human can sign. Their machine half (lighting,

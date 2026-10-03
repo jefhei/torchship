@@ -42,7 +42,7 @@
  */
 
 import { assembleShip, assemblyProblems } from '../assembler'
-import type { ShipAssembly } from '../assembler'
+import type { AssembleOptions, ShipAssembly } from '../assembler'
 import { SHIP_FIXTURES, type FixtureId, type ShipFixture } from '../fixtures'
 import { runInvariantHarness } from '../invariants'
 import { AUTHORED_KIT } from '../kit/modules/registry'
@@ -505,10 +505,17 @@ function wayfindingCheck(
  * Run the full Review Loop checklist on one canonical ship. `requireValidSpec`
  * is false so the NEGATIVE control (which the validator must reject) still
  * reports its own checklist findings instead of throwing — the validator's
- * verdict is this loop's `spec-valid` row, not a crash.
+ * verdict is this loop's `spec-valid` row, not a crash. `options` carries the
+ * assembler's budget/partition knobs (M3-T7 `minInstances`, M4-T4 `wearDensity`)
+ * so M5-T4's fix loop can re-review a ship after climbing a §10 rung; the
+ * leniency is forced, never overridable, so the loop never throws on a rejected
+ * spec.
  */
-export function reviewShip(fixture: ShipFixture): ShipReview {
-  const ship = assembleShip(fixture.spec, { requireValidSpec: false })
+export function reviewShip(
+  fixture: ShipFixture,
+  options: AssembleOptions = {},
+): ShipReview {
+  const ship = assembleShip(fixture.spec, { ...options, requireValidSpec: false })
   const world = navigationWorldOf(ship)
   const name = ship.spec.name
 
@@ -580,8 +587,9 @@ export function loopProblems(ships: readonly ShipReview[]): string[] {
  */
 export function reviewLoop(
   fixtures: readonly ShipFixture[] = SHIP_FIXTURES,
+  options: AssembleOptions = {},
 ): ReviewLoopReport {
-  const ships = fixtures.map(reviewShip)
+  const ships = fixtures.map((fixture) => reviewShip(fixture, options))
   const problems = loopProblems(ships)
   return {
     ships,

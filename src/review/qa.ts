@@ -13,6 +13,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { ReviewDefect, ReviewLoopReport, ShipReview } from './loop'
 import { EXIT_MAX_SEV1, EXIT_MAX_SEV2, HUMAN_REVIEW_ITEMS } from './loop'
+import type { FixLoopReport } from './fixLoop'
+import { FIXERS } from './fixLoop'
 
 /** Absolute path of the checked-in log (repo root, `QA.md`). */
 export const QA_PATH = resolve(process.cwd(), 'QA.md')
@@ -92,11 +94,65 @@ function defectTable(defects: readonly ReviewDefect[]): string {
   ].join('\n')
 }
 
+/** One fix-loop report's verdict cell. */
+function fixLoopVerdict(report: FixLoopReport): string {
+  if (report.negativeControl) return '⊘ negative control (skipped)'
+  if (!report.converged) {
+    return `❌ not converged (${report.remainingSev1} sev-1 / ${report.remainingSev2} sev-2)`
+  }
+  return report.iterations === 0
+    ? '✅ converged at pass 0'
+    : `✅ converged in ${report.iterations} pass(es)`
+}
+
+/**
+ * Render the M5-T4 fix loop as its own QA.md section: the exit-rule resolution
+ * after the registered fixers have run, plus the fixer roster. The negative
+ * control is shown as skipped (a rig that must fail is never repaired).
+ */
+export function fixLoopMarkdown(reports: readonly FixLoopReport[]): string {
+  const rows = reports.map((report) => {
+    const fixes =
+      report.fixesApplied.length > 0
+        ? report.fixesApplied.map((id) => `\`${id}\``).join(', ')
+        : '—'
+    const count = (value: number): string =>
+      report.negativeControl ? '—' : String(value)
+    return (
+      `| ${cell(report.label)} | ${cell(report.ship)} | ` +
+      `${report.negativeControl ? '—' : report.iterations} | ${fixes} | ` +
+      `${count(report.remainingSev1)} | ${count(report.remainingSev2)} | ` +
+      `${fixLoopVerdict(report)} |`
+    )
+  })
+  return [
+    '## Fix loop — M5-T4',
+    '',
+    '> PRD §14 step 4: fix, then re-walk only the affected ships. This pass applies',
+    '> the registered fixers to the Review Loop’s defects until the exit rule holds,',
+    '> re-running the loop (the affected ship’s walk included) after each fix. The',
+    '> three canonical ships enter already clean, so the loop converges at pass 0 —',
+    '> no fix is fabricated. The negative control is skipped: a rig that must fail is',
+    '> never repaired.',
+    '',
+    '| Preset | Ship | Passes | Fixes applied | sev-1 | sev-2 | Verdict |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    ...rows,
+    '',
+    `Registered fixers: ${FIXERS.map((fixer) => `\`${fixer.id}\``).join(' · ')}.`,
+    '',
+  ].join('\n')
+}
+
 /**
  * Render the whole Review Loop pass as the checked-in QA.md log. Deterministic:
- * no timestamps, so the golden test can compare byte-for-byte.
+ * no timestamps, so the golden test can compare byte-for-byte. When `fixLoop` is
+ * supplied, the M5-T4 exit-rule resolution is appended as its own section.
  */
-export function qaMarkdown(report: ReviewLoopReport): string {
+export function qaMarkdown(
+  report: ReviewLoopReport,
+  fixLoop?: readonly FixLoopReport[],
+): string {
   const shippable = report.ships.filter((ship) => ship.expectValid)
   const control = report.ships.filter((ship) => !ship.expectValid)
 
@@ -149,6 +205,9 @@ export function qaMarkdown(report: ReviewLoopReport): string {
     ...summaryRows,
     '',
     ...sections.flatMap((section) => [section, '', '---', '']),
+    ...(fixLoop !== undefined && fixLoop.length > 0
+      ? [fixLoopMarkdown(fixLoop), '---', '']
+      : []),
     '## Human sign-off (open)',
     '',
     'The `[review]` items only a human can sign. Their machine half (lighting,',
@@ -164,11 +223,14 @@ export function qaMarkdown(report: ReviewLoopReport): string {
  * Write QA.md from a report. Returns whether the file changed — the golden test
  * calls this so the log is regenerated on drift instead of failing on formatting.
  */
-export function writeQaLog(report: ReviewLoopReport): {
+export function writeQaLog(
+  report: ReviewLoopReport,
+  fixLoop?: readonly FixLoopReport[],
+): {
   changed: boolean
   path: string
 } {
-  const content = qaMarkdown(report)
+  const content = qaMarkdown(report, fixLoop)
   const existing = existsSync(QA_PATH) ? readFileSync(QA_PATH, 'utf8') : undefined
   if (existing === content) {
     return { changed: false, path: QA_PATH }

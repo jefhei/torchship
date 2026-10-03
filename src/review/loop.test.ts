@@ -11,10 +11,12 @@ import {
   sortedDefects,
 } from './loop'
 import { qaMarkdown, readQaLog, writeQaLog } from './qa'
+import { runFixLoops } from './fixLoop'
 
 const FIXTURE_ORDER = ['patrol', 'long-haul', 'science', 'stress']
 const REAL = SHIP_FIXTURES.filter((fixture) => fixture.expectValid)
 const report = reviewLoop()
+const fixReport = runFixLoops(SHIP_FIXTURES)
 
 /** Replace the crew deck's galley with storage — a ship with no coffee run. */
 function noGalleySpec(): ShipSpec {
@@ -159,8 +161,8 @@ describe('M5-T3 review loop — detection is real, not fixture-shaped', () => {
 
 describe('M5-T3 review loop — QA.md artifact', () => {
   it('keeps the checked-in QA.md in sync with the loop', () => {
-    writeQaLog(report)
-    expect(readQaLog()).toBe(qaMarkdown(report))
+    writeQaLog(report, fixReport)
+    expect(readQaLog()).toBe(qaMarkdown(report, fixReport))
   })
 
   it('writes a log with a verdict, every ship, and the open human sign-off', () => {
