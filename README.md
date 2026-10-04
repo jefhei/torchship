@@ -184,6 +184,33 @@ The three §8 [review] items that need a human eye (worn-and-warm mood, the fres
 onboarding time) are reported as **open human sign-off** items in `QA.md` — never quietly passed. The
 loop is a product gate, not a §8 verdict (the M4-T2/M5-T1 precedent); M5-T4 owns the fix loop.
 
+## glTF export (M6-T1)
+
+`src/export/` is the export contract (PRD §7 "scene → glTF"; §13 "the glTF interior loads in
+Blender with material slots intact and deck groups named per contract"). `exportGltf(assembly)`
+serialises an assembled ship with three.js's own `GLTFExporter`, run on the scene
+`buildExportScene` builds **from the M3-T7 draw plan** (`src/player/deckGeometry.ts`) — so the
+exported tree is the tree the walker walks:
+
+- one `Group` per deck, named **`deck-0 … deck-N`** (nose → aft), placed at the deck floor
+  `[0, floorY, 0]`, its geometry baked into the group's local frame;
+- one `Mesh` per merged material group and one `InstancedMesh` per instance batch, named by the
+  scene graph's own ids (`EXT_mesh_gpu_instancing` carries the batch placements);
+- one shared `MeshStandardMaterial` per §4 slot the ship draws, **named by the slot** (the M4-T1
+  `slotSurface` path — re-skin the theme and the export re-skins), so "material slots mapped to
+  named export materials" is data.
+
+Units are meters and the axis is stated by the hierarchy (deck floors descend in Y → thrust axis
+**−Y**); the contract also travels in `asset.extras` (`units` / `upAxis` / `thrustAxis`).
+`exportProblems(gltf, assembly)` validates a serialised document headlessly — deck groups, floors,
+unit scale, named slot materials, one mesh node per draw call, and **transform fidelity**: every
+instanced batch's TRANSLATION accessor is the batch's own placements and every merged group's
+POSITION bounds are its geometry's own bounds (deck-local, meters), so the serialised numbers can't
+drift from the assembly. `assertExportValid` is the throwing form; `npm run test` exercises the
+whole pass on all four canonical ships (and injects drift to prove the checker). No WebGL and no
+dev server: three's exporter is CPU-side for geometry with no textures (this project authors none).
+M6-T2 (Blender validation) and M6-T3/T4 (download + deployed demo) consume this surface.
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every
