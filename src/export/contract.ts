@@ -58,6 +58,27 @@ export const EXPORT_DOCUMENTATION = {
 
 /** Float component type (glTF). */
 const FLOAT = 5126
+
+/** glTF component type → byte size (5126 FLOAT is the only one the kit emits
+ *  for geometry, but indices are 5121/5123/5125 and the M6-T2 normals audit
+ *  must read them). */
+const COMPONENT_BYTES: Record<number, number> = {
+  5120: 1, // BYTE
+  5121: 1, // UNSIGNED_BYTE
+  5122: 2, // SHORT
+  5123: 2, // UNSIGNED_SHORT
+  5125: 4, // UNSIGNED_INT
+  5126: 4, // FLOAT
+}
+
+/** glTF accessor type → component count. */
+const TYPE_COMPONENTS: Record<string, number> = {
+  SCALAR: 1,
+  VEC2: 2,
+  VEC3: 3,
+  VEC4: 4,
+  MAT4: 16,
+}
 /** Absolute tolerance for deck-group transforms (exact in practice). */
 const TRANSFORM_EPS = 1e-9
 /** Absolute tolerance for serialised geometry (float32 positions/translations). */
@@ -149,12 +170,21 @@ function decodeBufferUri(uri: string): Uint8Array {
   return bytes
 }
 
-/** The float values of a VEC3 accessor, in order. Throws on a malformed doc. */
-export function readVec3Accessor(gltf: GltfDocument, index: number): number[] {
+/**
+ * The numeric values of any accessor, component-major (SCALAR → one per
+ * element, VEC3 → three per element), honouring `byteStride`. Throws on a
+ * malformed document. This is the generic reader the M6-T2 normals audit uses
+ * for POSITION / NORMAL / indices; `readVec3Accessor` is its VEC3-float form.
+ */
+export function readAccessorValues(gltf: GltfDocument, index: number): number[] {
   const accessor = gltf.accessors?.[index]
   if (accessor === undefined) throw new Error(`no accessor ${index}`)
-  if (accessor.componentType !== FLOAT || accessor.type !== 'VEC3') {
-    throw new Error(`accessor ${index} is not a FLOAT VEC3`)
+  const itemBytes = COMPONENT_BYTES[accessor.componentType]
+  const components = TYPE_COMPONENTS[accessor.type]
+  if (itemBytes === undefined || components === undefined) {
+    throw new Error(
+      `accessor ${index} has unsupported type ${accessor.componentType}/${accessor.type}`,
+    )
   }
   const viewDef = gltf.bufferViews?.[accessor.bufferView ?? -1]
   if (viewDef === undefined) throw new Error(`accessor ${index} has no bufferView`)
@@ -164,17 +194,50 @@ export function readVec3Accessor(gltf: GltfDocument, index: number): number[] {
   const bytes = decodeBufferUri(bufferDef.uri)
   const data = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const base = (viewDef.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
-  const stride = viewDef.byteStride ?? 3 * 4
+  const stride = viewDef.byteStride ?? components * itemBytes
   const out: number[] = []
   for (let i = 0; i < accessor.count; i++) {
-    const at = base + i * stride
-    out.push(
-      data.getFloat32(at, true),
-      data.getFloat32(at + 4, true),
-      data.getFloat32(at + 8, true),
-    )
+    for (let c = 0; c < components; c++) {
+      out.push(
+        readComponent(data, base + i * stride + c * itemBytes, accessor.componentType),
+      )
+    }
   }
   return out
+}
+
+/** One numeric component of a glTF accessor at a byte offset. */
+function readComponent(
+  data: DataView,
+  byteOffset: number,
+  componentType: number,
+): number {
+  switch (componentType) {
+    case 5120:
+      return data.getInt8(byteOffset)
+    case 5121:
+      return data.getUint8(byteOffset)
+    case 5122:
+      return data.getInt16(byteOffset, true)
+    case 5123:
+      return data.getUint16(byteOffset, true)
+    case 5125:
+      return data.getUint32(byteOffset, true)
+    case FLOAT:
+      return data.getFloat32(byteOffset, true)
+    default:
+      throw new Error(`unsupported component type ${componentType}`)
+  }
+}
+
+/** The float values of a VEC3 accessor, in order. Throws on a malformed doc. */
+export function readVec3Accessor(gltf: GltfDocument, index: number): number[] {
+  const accessor = gltf.accessors?.[index]
+  if (accessor === undefined) throw new Error(`no accessor ${index}`)
+  if (accessor.componentType !== FLOAT || accessor.type !== 'VEC3') {
+    throw new Error(`accessor ${index} is not a FLOAT VEC3`)
+  }
+  return readAccessorValues(gltf, index)
 }
 
 /* ------------------------------------------------------------- validation */

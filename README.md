@@ -209,7 +209,38 @@ POSITION bounds are its geometry's own bounds (deck-local, meters), so the seria
 drift from the assembly. `assertExportValid` is the throwing form; `npm run test` exercises the
 whole pass on all four canonical ships (and injects drift to prove the checker). No WebGL and no
 dev server: three's exporter is CPU-side for geometry with no textures (this project authors none).
-M6-T2 (Blender validation) and M6-T3/T4 (download + deployed demo) consume this surface.
+M6-T3/T4 (download + deployed demo) consume this surface.
+
+## Blender validation (M6-T2)
+
+`src/export/blender.ts` is the consumer-shaped acceptance check for the export (BUILD_PLAN M6-T2:
+"Validate export in Blender (materials intact, deck groups present, no flipped normals)"). It reads
+the serialised document the way an importer does — scene → node → mesh → primitive → material /
+accessor — and reports the three criteria as data, after first running the M6-T1 contract
+(`exportProblems`):
+
+- **deck groups present** (`deckGroupCheck`) — the scene roots are `deck-0 … deck-N`, in order, each
+  carrying meshes;
+- **materials intact** (`materialCheck`) — every referenced material resolves to a named §4 slot,
+  one per drawn slot, each with a usable PBR payload (base colour / metalness / roughness) and
+  emission on the slots the theme makes emissive;
+- **no flipped normals** (`auditNormals`, `src/export/normals.ts`) — every triangles primitive's
+  faces wind with their vertex normals (and normals are unit length).
+
+`blenderValidation` / `blenderValidationProblems` / `assertBlenderValid` are the surface. The vitest
+suite (`src/export/blender.test.ts`) pins all three clean on the four canonical ships and injects a
+missing / renamed / empty deck group, a dropped / duplicated / renamed material, a lost emission, an
+unlit PBR payload and inverted / non-unit / degenerate normals to prove the checks fire.
+
+The real-Blender leg: `scripts/blender-validate.py` imports the written `.gltf` with Blender's own
+glTF importer (the `bpy` module, headless) and asserts the same three claims, including per-polygon
+winding-vs-corner-normal agreement. The corpus is written to `dist/export/` by the test suite:
+
+    npm run validate:export                        # write dist/export/*.gltf + headless checks
+    BLENDER_PYTHON=/path/to/bpy/python npm run validate:blender
+
+Measured on Blender 5.0.1 (see `docs/export-validation.md`): deck groups present and ordered, the
+nine §4 materials intact, and **0 flipped normals** across 6,184–7,260 polygons per ship.
 
 ## Status
 

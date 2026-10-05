@@ -13,6 +13,8 @@
     "check:kit": "vitest run src/kit/harness",
     "qa:review": "vitest run src/review/loop src/review/landmarks src/review/qa",
     "qa:fixloop": "vitest run src/review/fixLoop",
+    "validate:export": "vitest run src/export/blender",
+    "validate:blender": "node scripts/run-blender-validation.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
