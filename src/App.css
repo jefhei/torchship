@@ -268,3 +268,106 @@
   border-radius: 3px;
   padding: 3px 10px;
 }
+
+/* ---------------------------------------------------------------------------
+   M6-T3 share control: preset picker, seed stepper and the shareable link.
+   Top-right (clear of the M5-T1 wayfinding overlay at top-left) and above the
+   full-screen "click to look around" prompt, so it is usable before or after
+   the pointer is captured.
+   --------------------------------------------------------------------------- */
+
+.share-control {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 320px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: #9aa4b2;
+  background: rgba(10, 12, 15, 0.82);
+  border: 1px solid #23272e;
+  border-radius: 3px;
+  padding: 8px 10px;
+}
+
+.share-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.share-label {
+  width: 38px;
+  flex: none;
+  color: #5f6b58;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+}
+
+.share-presets {
+  display: flex;
+  gap: 4px;
+}
+
+.share-preset,
+.share-stepper,
+.share-copy {
+  font: inherit;
+  letter-spacing: 0.06em;
+  color: #b7c0cc;
+  background: #161a20;
+  border: 1px solid #2c333d;
+  border-radius: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.share-preset:hover,
+.share-stepper:hover,
+.share-copy:hover {
+  border-color: #3a3120;
+  color: #e8eaed;
+}
+
+.share-preset-active {
+  color: #d3a860;
+  border-color: #3a3120;
+  background: #1b1711;
+}
+
+.share-stepper {
+  padding: 3px 8px;
+  line-height: 1;
+}
+
+.share-seed {
+  width: 72px;
+  font: inherit;
+  color: #e8eaed;
+  background: #0e1116;
+  border: 1px solid #2c333d;
+  border-radius: 3px;
+  padding: 3px 6px;
+}
+
+.share-url {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 10px;
+  color: #7d8694;
+  background: #0e1116;
+  border: 1px solid #2c333d;
+  border-radius: 3px;
+  padding: 3px 6px;
+}
+
+.share-copy {
+  flex: none;
+  color: #d3a860;
+}

@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const spies = vi.hoisted(() => ({ requestWalkLock: vi.fn() }))
@@ -33,10 +33,15 @@ vi.mock('./player', async (importOriginal) => {
 
 import Viewport from './Viewport'
 import { setWalkLocked } from './player'
+import { SHARE_STORAGE_KEY } from './share'
 
 afterEach(() => {
   act(() => setWalkLocked(false))
   spies.requestWalkLock.mockReset()
+  // M6-T3: a share-change test writes the autosave and the address bar; reset
+  // both so the environment the other tests boot into is untouched.
+  window.localStorage.clear()
+  window.history.replaceState(null, '', '/')
 })
 
 describe('Viewport walkthrough UI (M3-T4)', () => {
@@ -85,5 +90,33 @@ describe('Viewport walkthrough UI (M3-T4)', () => {
     expect(screen.queryByTestId('deck-indicator')).toBeNull()
     act(() => setWalkLocked(false))
     expect(screen.queryByTestId('wayfinding')).toBeNull()
+  })
+})
+
+describe('Viewport share + autosave (M6-T3)', () => {
+  it('boots the default Patrol preset and shows its share link', async () => {
+    render(<Viewport />)
+    await screen.findByTestId('walk-lock-prompt')
+    expect(screen.getByTestId('share-control')).toBeInTheDocument()
+    const url = screen.getByTestId('share-url') as HTMLInputElement
+    expect(url.value).toContain('p=patrol')
+    expect(screen.getByTestId('share-preset-patrol')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('re-assembles the ship, autosaves and rewrites the URL on a preset change', async () => {
+    render(<Viewport />)
+    await screen.findByTestId('walk-lock-prompt')
+    fireEvent.click(screen.getByTestId('share-preset-long-haul'))
+    await waitFor(() => {
+      expect(window.location.search).toBe('?p=long-haul')
+    })
+    expect(window.localStorage.getItem(SHARE_STORAGE_KEY)).toBe('p=long-haul')
+    expect(screen.getByTestId('share-preset-long-haul')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
   })
 })

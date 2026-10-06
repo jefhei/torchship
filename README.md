@@ -242,6 +242,36 @@ winding-vs-corner-normal agreement. The corpus is written to `dist/export/` by t
 Measured on Blender 5.0.1 (see `docs/export-validation.md`): deck groups present and ordered, the
 nine §4 materials intact, and **0 flipped normals** across 6,184–7,260 polygons per ship.
 
+## Share URL + autosave (M6-T3)
+
+`src/share/` is the persistence layer (PRD §6.1: *"autosave of the selected spec + seed to
+localStorage; shareable URL encodes spec + seed"*). A `ShareState` is the selected `ShipSpec` plus
+the variation `seed` and the worn-detail `wearDensity` rung; `effectiveSpec` assembles
+`{ ...spec, seed }` so the seed control is authoritative.
+
+- **codec** (`codec.ts`) — `ShareState` ⇆ a query string. It is **preset-aware**: a canonical ship
+  travels as `p=<preset>` (the spec already lives in the bundle — `p=patrol` is the whole default
+  link), a custom hull as `s=<base64url JSON>` (UTF-8 safe, so em-dash deck labels survive). The
+  decoder is **total and strict**: it returns `null` for an unknown preset, malformed base64, JSON
+  that is not a Ship Spec, a spec the M1-T3 validator rejects (which is what keeps the negative
+  stress rig out of links), an out-of-range seed, or an unknown wear rung — nothing throws.
+- **storage** (`storage.ts`) — the autosave is *the same query string* under a versioned key
+  (`torchship.share.v1`), so a link and an autosave can never disagree about the format. Denied /
+  quota-full storage degrades to `false`/`null`, never an exception.
+- **url** (`url.ts`) — `shareUrlFor` builds the link; `syncShareUrl` rewrites the address bar with
+  `replaceState` (no history spam) and no-ops when the query already matches.
+- **resolve** (`resolve.ts`) — boot precedence **URL → autosave → default preset** (Patrol); a
+  malformed link is treated as absent so it falls back to the autosave. `applyShareState` persists +
+  publishes in one call.
+- **ShareControl** (`ShareControl.tsx`) — the DOM affordance (top-right of the viewport): the three
+  presets, a seed stepper, and the copyable share link.
+
+`Viewport` boots from `resolveShareState(window.location.search)` and, on any change, calls
+`applyShareState` (autosave + address bar) and re-assembles the keyed scene, so the link always
+reproduces exactly what is on screen. 57 tests (`share.test.ts`, `ShareControl.test.tsx`, and two
+`Viewport.test.tsx` integration tests) cover the codec round-trips and rejections, the storage
+autosave, the URL plumbing and the resolution precedence.
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every

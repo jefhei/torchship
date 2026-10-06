@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { assembleShip } from './assembler'
-import { PATROL_SPEC } from './fixtures'
 import {
   WalkthroughScene,
   isWalkLocked,
@@ -10,16 +9,36 @@ import {
   subscribeWalkLock,
   type WalkReport,
 } from './player'
+import {
+  ShareControl,
+  applyShareState,
+  effectiveSpec,
+  encodeShareState,
+  resolveShareState,
+  shareStatesEqual,
+  shareUrlFor,
+  type ShareState,
+} from './share'
 import { WayfindingOverlay } from './wayfinding'
 
 /**
- * M1-T1 viewport, M3-T4 walkthrough, M5-T1 wayfinding UX.
+ * M1-T1 viewport, M3-T4 walkthrough, M5-T1 wayfinding UX, M6-T3 share/autosave.
  *
- * The `<Canvas>` carries the assembled Patrol ship (M3-T1's scene graph, drawn
- * by the M2 part renderer) and the first-person rig (M3-T4): a walker is
- * dropped at the M3-T6 spawn — the crew deck at the foot of the spine, facing
- * into the galley — under-burn gravity pulls it toward the drive, and the WASD
- * keys drive it through the M3-T3 collision hull.
+ * The `<Canvas>` carries the assembled ship (M3-T1's scene graph, drawn by the
+ * M2 part renderer) and the first-person rig (M3-T4): a walker is dropped at
+ * the M3-T6 spawn — the crew deck at the foot of the spine, facing into the
+ * galley — under-burn gravity pulls it toward the drive, and the WASD keys
+ * drive it through the M3-T3 collision hull.
+ *
+ * WHICH ship is assembled is M6-T3's job: the app boots from a share link in
+ * the URL, else the localStorage autosave, else the default preset (Patrol) —
+ * `resolveShareState`. The `<ShareControl>` panel lets the author pick one of
+ * the three preset ships and step the variation seed; every change re-assembles
+ * the ship, autosaves it, and rewrites the address bar so the link always
+ * reproduces what is on screen (`applyShareState`). Because a change swaps the
+ * ship the walker stands in, the scene is keyed by the encoded share state, so
+ * a new ship remounts the rig at its own spawn instead of carrying a stale pose
+ * across.
  *
  * Walking is the app's only camera mode — there is no orbit rig to swap to — so
  * the rig is always mounted and the DOM overlay is the whole walkthrough UI: a
@@ -32,13 +51,12 @@ import { WayfindingOverlay } from './wayfinding'
  * keeps standing where they left it — physics runs whether or not the pointer
  * is captured, so gravity is never paused.
  *
- * The preset is hard-wired to Patrol here; the picker (PRD §6.1) and the share
- * URL / seed (M6-T3) come later and will hand this component a different spec.
- * Lighting is M4-T2's practical-only rig: `WalkthroughScene` derives it from the
- * assembly's own light sockets and mounts the deck the walker is on, which is
- * why this component hands it `walk.deckIndex` — the walk report is already the
- * app's one source for "which deck am I on". The interim M1-T1 ambient light is
- * gone (PRD §4 allows no sun and no sky; the rig carries its own warm fill).
+ * Lighting is M4-T2's practical-only rig: `WalkthroughScene` derives it from
+ * the assembly's own light sockets and mounts the deck the walker is on, which
+ * is why this component hands it `walk.deckIndex` — the walk report is already
+ * the app's one source for "which deck am I on". The interim M1-T1 ambient
+ * light is gone (PRD §4 allows no sun and no sky; the rig carries its own warm
+ * fill).
  *
  * M5-T1's overlay needs the same navigation world the rig walks (it reads the
  * ladder runs off it), so the app derives it once here from the same assembly —
@@ -51,13 +69,47 @@ export default function Viewport() {
   const [ready, setReady] = useState(false)
   const [locked, setLocked] = useState(() => isWalkLocked())
   const [walk, setWalk] = useState<WalkReport | null>(null)
+  const [share, setShare] = useState<ShareState>(() =>
+    resolveShareState({
+      search: typeof window === 'undefined' ? '' : window.location.search,
+    }),
+  )
 
-  const assembly = useMemo(() => assembleShip(PATROL_SPEC), [])
+  // The latest state without re-creating `changeShare` on every change (so the
+  // control's callbacks stay stable across re-assemblies).
+  const shareRef = useRef(share)
+
+  const changeShare = useCallback((next: ShareState) => {
+    if (shareStatesEqual(shareRef.current, next)) {
+      return
+    }
+    shareRef.current = next
+    // Persist to localStorage and publish to the address bar; the reload path
+    // (resolveShareState) reads exactly these two back.
+    applyShareState(next)
+    setShare(next)
+  }, [])
+
+  const spec = useMemo(() => effectiveSpec(share), [share])
+  const assembly = useMemo(
+    () => assembleShip(spec, { wearDensity: share.wearDensity }),
+    [spec, share.wearDensity],
+  )
   const world = useMemo(() => navigationWorldOf(assembly), [assembly])
   const hatch = useMemo(
     () =>
       world.hatches.find((candidate) => candidate.id === walk?.hatchPromptId) ?? null,
     [world, walk?.hatchPromptId],
+  )
+  // A stable identity for the assembled ship: a new key remounts the rig when
+  // the ship (or the seed that varies its detail) changes.
+  const shareKey = useMemo(() => encodeShareState(share), [share])
+  const shareUrl = useMemo(
+    () =>
+      typeof window === 'undefined'
+        ? ''
+        : shareUrlFor(share, window.location.origin + window.location.pathname),
+    [share],
   )
 
   useEffect(() => subscribeWalkLock(() => setLocked(isWalkLocked())), [])
@@ -71,11 +123,13 @@ export default function Viewport() {
       >
         <color attach="background" args={['#05070a']} />
         <WalkthroughScene
+          key={shareKey}
           assembly={assembly}
           deckIndex={walk?.deckIndex ?? null}
           onStep={setWalk}
         />
       </Canvas>
+      <ShareControl share={share} url={shareUrl} onChange={changeShare} />
       {ready && (
         <span className="viewport-ready" data-testid="viewport-ready">
           viewport ready
