@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // M6-T4: relative asset URLs so ONE dist/ serves from a subpath (a GitHub
+  // Pages project site at /torchship/) as well as a domain root. The default
+  // absolute base hard-codes the site to "/". `src/demo/deploy.ts` gates this.
+  base: './',
   build: {
     rollupOptions: {
       output: {

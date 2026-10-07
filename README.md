@@ -272,6 +272,24 @@ reproduces exactly what is on screen. 57 tests (`share.test.ts`, `ShareControl.t
 `Viewport.test.tsx` integration tests) cover the codec round-trips and rejections, the storage
 autosave, the URL plumbing and the resolution precedence.
 
+## Demo (M6-T4)
+
+The app is a **client-only static site**: `npm run build` writes `dist/` and `npm run preview` serves it locally. The build uses the relative Vite base `./`, so the same `dist/` runs from a subpath (a GitHub Pages project site) as well as a domain root. `npm run deploy:check` validates a built `dist/` against the deploy contract — `index.html`, relative asset refs, the four preset JSONs, the favicon, and the JS/CSS bundle.
+
+- **Demo:** https://jefhei.github.io/torchship/ (GitHub Pages (project site), served from `/torchship/`)
+
+The picker ships the three real presets. Each interior below is a Blender render of the M6-T1 glTF export from that ship's own assembly (regenerate with `npm run demo:render`):
+
+| Preset | Space | Interior |
+| --- | --- | --- |
+| Patrol | Crew deck — galley & bunks | ![Patrol — Crew deck — galley & bunks](public/demo/patrol.png) |
+| Long-Haul | Cargo hold B — spares & workshop stores | ![Long-Haul — Cargo hold B — spares & workshop stores](public/demo/long-haul.png) |
+| Science | Science deck — expanded med bay & sensor suite | ![Science — Science deck — expanded med bay & sensor suite](public/demo/science.png) |
+
+The **coffee run** (crew deck → the coffee station → back) — replayed headlessly by the M5-T2 recorder and rendered frame by frame (24 frames at 12 fps):
+
+![The coffee run](public/demo/coffee-run.gif)
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every

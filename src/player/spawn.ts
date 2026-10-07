@@ -284,9 +284,10 @@ export interface SpawnVerdict {
  * The world bounds of a module instance's own placed geometry. `PlacedModule.parts`
  * are ALREADY world parts (M3-T1 placed them through the instance's origin and
  * yaw), so this is a plain union — transforming them again would double-apply
- * the pose.
+ * the pose. Exported for the M6-T4 demo shot list, which reuses the same
+ * containment test off the crew deck.
  */
-function moduleWorldBounds(owner: PlacedModule): Aabb3 {
+export function moduleWorldBounds(owner: PlacedModule): Aabb3 {
   const min: [number, number, number] = [Infinity, Infinity, Infinity]
   const max: [number, number, number] = [-Infinity, -Infinity, -Infinity]
   for (const placed of owner.parts) {
