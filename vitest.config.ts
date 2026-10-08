@@ -6,5 +6,9 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
+    // The glTF export/validation tests (src/export/*, src/demo/render) assemble
+    // and export whole ships — CPU-heavy enough that a parallel run can push a
+    // single "loads clean" case past vitest's 5s default and flake the suite.
+    testTimeout: 20000,
   },
 })
