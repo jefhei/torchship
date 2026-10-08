@@ -33,13 +33,10 @@ request — lint/format/typecheck/material-slots, then vitest, then the Vite bui
 material slot fails the build (PRD §7): the §4 slot vocabulary lives in `src/types/materials.ts`,
 the theme registry and its completeness gate in `src/materials/`.
 
-> The workflows are parked under `ci/`, not `.github/workflows/`: GitHub rejects any push that
-> creates `.github/workflows/*` unless the credential carries the `workflow` permission, and this
-> machine's token is a classic `repo`-scope PAT (see `~/notes/github-token-strategy.md`). From a
-> workflow-scoped credential, activate CI with `git mv ci/github-actions-ci.yml
-> .github/workflows/ci.yml` and the Pages deploy with `git mv ci/deploy-pages.yml
-> .github/workflows/deploy-pages.yml` (and set Pages source = "GitHub Actions"). Until then CI does
-> not run, the demo is not published, and `npm run verify` is the gate.
+> CI runs from `.github/workflows/ci.yml` and the demo deploys from
+> `.github/workflows/deploy-pages.yml` (GitHub Pages, source = "GitHub Actions") — both activated
+> 2026-10-08 once the box token gained the `workflow` scope. The published demo is at
+> https://jefhei.github.io/torchship/.
 
 ## Seams (M3-T2)
 

@@ -1,0 +1,50 @@
+# Deploy the client-only demo to GitHub Pages (project site; Pages source =
+# "GitHub Actions"). Builds dist/ and runs the M6-T4 deploy-contract gate
+# (`npm run check:dist`) before publishing to https://jefhei.github.io/torchship/.
+name: Deploy demo (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build dist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build # check:slots && tsc -b && vite build
+      - run: npm run check:dist # the M6-T4 deploy-contract gate
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true # create the Pages site if it does not exist
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
