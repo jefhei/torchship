@@ -1,0 +1,69 @@
+# INACTIVE — awaiting a workflow-scoped credential (M6-T4 deploy).
+#
+# Same gate as ci/github-actions-ci.yml: GitHub refuses any push that creates or
+# updates files under `.github/workflows/` unless the credential carries
+# `workflow` scope (classic PAT) or `Workflows: Read and write` (fine-grained).
+# The current box credential is a classic PAT with `repo` scope only, so this
+# deploy workflow is parked here, alongside the CI workflow, until the scope is
+# granted.
+#
+# TO ACTIVATE (from a credential with the Workflows permission):
+#   git mv ci/github-actions-ci.yml .github/workflows/ci.yml
+#   git mv ci/deploy-pages.yml     .github/workflows/deploy-pages.yml
+#   # enable Pages with source = "GitHub Actions" (do once, either:
+#   #   Settings -> Pages -> Build and deployment -> Source: GitHub Actions, or
+#   #   POST /repos/jefhei/torchship/pages  {"build_type":"workflow"})
+#   git commit -m "ci: activate CI + the Pages deploy workflow"
+#   git push
+#
+# Builds the client-only dist/ and publishes it to GitHub Pages as a project
+# site at https://jefhei.github.io/torchship/ (the relative Vite base `./` in
+# vite.config.ts makes the one dist/ serve correctly from the /torchship/
+# subpath; `npm run check:dist` gates the deploy contract before upload).
+name: Deploy demo (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build dist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build # check:slots && tsc -b && vite build
+      - run: npm run check:dist # the M6-T4 deploy-contract gate
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true # create the Pages site if it does not exist
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
