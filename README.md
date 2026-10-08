@@ -290,6 +290,28 @@ The **coffee run** (crew deck → the coffee station → back) — replayed head
 
 ![The coffee run](public/demo/coffee-run.gif)
 
+### Live app frames
+
+Captured from the running app itself (headless Chrome + software WebGL) — these are
+_not_ Blender renders, so they show the practical lighting, bloom and HUD as they
+actually appear in the browser:
+
+**Crew deck — the galley at spawn**, under practical panel/task lighting with the
+coffee-station landmark:
+
+![Crew deck — galley & bunks](public/demo/live-crew.png)
+
+**Vertical navigation — mid-climb on the spine ladder**, the run that connects one
+deck to the next:
+
+![On the spine ladder](public/demo/live-ladder.png)
+
+**Wayfinding — the deck-transition moment on arrival**: the moment card names the
+deck and how you got there ("up the ladder … toward the bow"), and the indicator
+flags the head deck:
+
+![Arriving at the head deck](public/demo/live-wayfinding.png)
+
 ## Status
 
 Tracked in `.hermes/status.json` (read FIRST) and `.task-progress.json`; both update after every
